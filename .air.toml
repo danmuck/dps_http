@@ -1,0 +1,54 @@
+# Project root (where air will look for .go files)
+root = "."
+
+# Where to write temporary binaries/logs
+tmp_dir = "tmp"
+
+# ------------------------------------------------------------------------------
+# Build settings
+# ------------------------------------------------------------------------------
+[build]
+# Command to build your server
+cmd = "go build -o tmp/server cmd/server/main.go"
+# The binary that will be run
+bin = "tmp/server"
+# File extensions to watch for rebuilds
+include_ext = ["go", "tpl", "tmpl", "html"]
+# Directories to ignore
+exclude_dir = ["assets", "tmp", "vendor", "node_modules"]
+# Delay (in milliseconds) between detecting file changes and rebuilding
+delay = 1000
+# Time to wait (ms) before killing the last process
+kill_delay = 500
+
+# ------------------------------------------------------------------------------
+# Color settings
+# ------------------------------------------------------------------------------
+[color]
+main = "yellow"
+watcher = "cyan"
+build = "green"
+runner = "magenta"
+
+# ------------------------------------------------------------------------------
+# Logging settings
+# ------------------------------------------------------------------------------
+[log]
+# Show timestamps in logs
+time = true
+
+# ------------------------------------------------------------------------------
+# Optional: custom environment variables
+# ------------------------------------------------------------------------------
+# [env]
+#   MONGO_URI    = "mongodb://127.0.0.1:27017/main_db"
+#   JWT_SECRET   = "replace-me"
+#   GIN_MODE     = "debug"
+
+# ------------------------------------------------------------------------------
+# Optional: HTTP server health check
+# ------------------------------------------------------------------------------
+# [server]
+#   # If you enable this, air will wait for a successful GET /health before restarting
+#   cmd   = "curl --fail http://localhost:8080/health"
+#   delay = 200
