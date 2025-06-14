@@ -1,6 +1,7 @@
 package users
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	// "go.mongodb.org/mongo-driver/mongo"
 )
 
 // Claims defines the JWT payload
@@ -24,7 +24,7 @@ type Claims struct {
 
 // User represents an authenticated user
 type User struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	ID           primitive.ObjectID `bson:"_id,omitempty" json:"_id"`
 	Username     string             `bson:"username" json:"username"`
 	Email        string             `bson:"email" json:"email"`
 	PasswordHash string             `bson:"password_hash" json:"-"`
@@ -38,19 +38,24 @@ type User struct {
 }
 
 func (u *User) string() string {
+	var token string = "[no token]"
+	if len(u.Token) > 20 {
+		token = u.Token[:10] + " ... " + u.Token[len(u.Token)-10:]
+	}
 	return fmt.Sprintf(`
 	User: %s
 	Password: %s
 	Email: %s
 	Roles: %v
-	Token: %s
+	Token: [%s]
 
 	CreatedAt: %s
 	UpdatedAt: %s
 	Bio: %s
 	AvatarURL: %s
 `,
-		u.Username, u.PasswordHash, u.Email, u.Roles, u.Token, u.CreatedAt.Time(),
+		u.Username, u.PasswordHash, u.Email, u.Roles, token,
+		u.CreatedAt.Time(),
 		u.UpdatedAt.Time(), u.Bio, u.AvatarURL)
 
 }
@@ -66,17 +71,17 @@ type createUserPayload struct {
 
 func GetUser(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Printf("> Getting user by username: %s", c.Param("username"))
+		log.Printf("GetUser: getting user by username: %s", c.Param("username"))
 		key := c.Param("username") // you’re using username as the key now
 
 		// retrieve the raw map from storage
 		raw, ok := store.Lookup("users", bson.M{"username": key})
 		if !ok {
-			log.Printf("> User not found: %s", key)
+			log.Printf("GetUser: user not found: %s", key)
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		log.Printf("> Getting raw user map: %v", raw)
+		log.Printf("GetUser: getting raw user map: %v", raw["username"])
 
 		rawBSON, _ := bson.Marshal(raw)
 		var user User
@@ -86,34 +91,67 @@ func GetUser(store storage.Storage) gin.HandlerFunc {
 		}
 
 		// return the User struct
-		log.Printf("> Got user: %s", user.string())
+		log.Printf("GetUser: got user: %s", user.string())
 		c.JSON(http.StatusOK, user)
 	}
 }
 
+type updateUserPayload struct {
+	Email     *string `json:"email,omitempty"`
+	Bio       *string `json:"bio,omitempty"`
+	AvatarURL *string `json:"avatarURL,omitempty"`
+}
+
 func UpdateUser(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var user User
-		if err := c.ShouldBindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status": "error",
-				"error":  "invalid request body",
-			})
+		username := c.Param("id")
+		log.Printf("UpdateUser: updating user by username: %s", username)
+		var patch updateUserPayload
+		if err := c.ShouldBindJSON(&patch); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
 			return
 		}
 
-		if err := store.Update("users", c.Param("id"), user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to update user",
-			})
+		// retrieve the exact document by key
+		rawValue, ok := store.Lookup("users", bson.M{"username": username})
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		log.Printf("UpdateUser: retrieved raw user map: %v", rawValue)
+		// note: there must be a better way to do this
+		// convert the rawValue (any) into User struct
+		js, err := json.Marshal(rawValue)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "marshal failure"})
+			return
+		}
+		var existing User
+		if err := json.Unmarshal(js, &existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "unmarshal failure"})
+			return
+		}
+		log.Printf("UpdateUser: existing user: %s %v", existing.string(), existing.ID.Hex())
+
+		if patch.Email != nil {
+			existing.Email = *patch.Email
+		}
+		if patch.Bio != nil {
+			existing.Bio = *patch.Bio
+		}
+		if patch.AvatarURL != nil {
+			existing.AvatarURL = *patch.AvatarURL
+		}
+		existing.UpdatedAt = primitive.NewDateTimeFromTime(time.Now())
+
+		// write the full updated user object back under the same key
+		if err := store.Update("users", existing.ID.Hex(), existing); err != nil {
+			log.Printf("UpdateUser: failed to update user %s: %v \n  %v", username, err, existing)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"user":   user,
-		})
+		c.JSON(http.StatusOK, existing)
 	}
 }
 

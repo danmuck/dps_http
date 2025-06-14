@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"slices"
 	"time"
@@ -70,6 +71,12 @@ func cleanAndPrefix(filter any) bson.M {
 
 	out := bson.M{}
 	for key, val := range fm {
+		if key == "key" {
+			// special case for "key" to avoid prefixing
+			log.Printf("cleanAndPrefix: allowing key %q without prefix", key)
+			out[key] = val
+			continue
+		}
 		if slices.Contains(allowed, key) {
 			prefixed := "value." + key
 			log.Printf("cleanAndPrefix: allowing %q → %q", key, prefixed)
@@ -79,7 +86,7 @@ func cleanAndPrefix(filter any) bson.M {
 	return out
 }
 
-// Basic CRUD operations
+// basic CRUD operations
 func (ms *MongoStore) Store(bucket string, key string, value any) error {
 	log.Printf("Storing key %q in bucket %q", key, bucket)
 	collection := ms.connectOrCreatBucket(bucket)
@@ -92,17 +99,18 @@ func (ms *MongoStore) Store(bucket string, key string, value any) error {
 	return err
 }
 
-/*
-*	Expects key to be a string and a username to retrieve
- */
+// retreieves a value by key from a bucket
+// note: this wraps Lookup() with a specific filter for the key
+// it returns the value directly as `any` type
 func (ms *MongoStore) Retrieve(bucket string, key string) (any, error) {
 	log.Printf("Retrieving key %q from bucket %q", key, bucket)
 
-	result, _ := ms.Lookup(bucket, map[string]any{"key": key})
+	result, _ := ms.Lookup(bucket, bson.M{"key": key})
 
 	return result["value"], nil
 }
 
+// TODO: implement
 func (ms *MongoStore) Delete(bucket string, key string) error {
 	collection := ms.connectOrCreatBucket(bucket)
 
@@ -110,45 +118,57 @@ func (ms *MongoStore) Delete(bucket string, key string) error {
 	return err
 }
 
+// TODO: implement
 func (ms *MongoStore) Update(bucket string, key string, value any) error {
-	collection := ms.connectOrCreatBucket(bucket)
+	col := ms.connectOrCreatBucket(bucket)
+	log.Printf("Updating key %q in bucket %q with value: %v", key, bucket, value)
+	// 1) Explicit BSON filter on the top‐level "key" field
+	filter := bson.M{"key": key}
+	// 2) Explicit BSON update of the nested "value"
+	update := bson.M{"$set": bson.M{"value": value}}
 
-	_, err := collection.UpdateOne(context.Background(), map[string]any{"key": key}, map[string]any{
-		"$set": map[string]any{"value": value},
-	})
-	return err
+	result, err := col.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	// 3) If no document matched, surface an error
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("no document with key=%q in bucket=%q", key, bucket)
+	}
+	// (Optionally, you can also check result.ModifiedCount==0 to warn if the value
+	// was identical and thus not modified.)
+
+	return nil
 }
 
-/**************************************************************************************
-*
-*	Lookup retrieves a specific key in a bucket with a filter
-*
-*	The filter is expected to be a map-like structure (e.g., bson.M) that can be used to build a MongoDB query.
-*	It returns the first matching document as a map[string]any and a boolean indicating if it was found.
-*	If no document matches the filter, it returns nil and false.
-*
-*	The filter can include MongoDB operators like $or, $and, etc., and will be prefixed with "value." for fields.
-*
-*	Note: This function iterates through the filter to build a complete MongoDB query and it does **not**
-*	require the key to be present in the filter.
-*
-*	Example usage:
-*       filter := bson.M{
-*			"key": "someKey",
-*		}
-*
-*       OR
-*
-*		filter := bson.M{
-*			"$or": []any{
-*				bson.M{"username": "someKey"},
-*				bson.M{"email": "someValue"},
-*			},
-*			"value.status": "active",
-*		}
-*		result, found := ms.Lookup("myBucket", filter)
-*
-**************************************************************************************/
+//		Lookup retrieves a specific key in a bucket with a filter
+//
+//		The filter is expected to be a map-like structure (e.g., bson.M) that can be used to build a MongoDB query.
+//		It returns the first matching document as a map[string]any and a boolean indicating if it was found.
+//		If no document matches the filter, it returns nil and false.
+//
+//		The filter can include MongoDB operators like $or, $and, etc., and will be prefixed with "value." for fields.
+//
+//		Note: This function iterates through the filter to build a complete MongoDB query and it does **not**
+//		require the key to be present in the filter.
+//
+//		Example usage:
+//	       filter := bson.M{
+//				"key": "someKey",
+//			}
+//
+//	       OR
+//
+//			filter := bson.M{
+//				"$or": []any{
+//					bson.M{"username": "someKey"},
+//					bson.M{"email": "someValue"},
+//				},
+//				"value.status": "active",
+//			}
+//			result, found := ms.Lookup("myBucket", filter)
+//
+// //
 func (ms *MongoStore) Lookup(bucket string, filter any) (map[string]any, bool) {
 	col := ms.connectOrCreatBucket(bucket)
 
@@ -177,7 +197,7 @@ func (ms *MongoStore) Lookup(bucket string, filter any) (map[string]any, bool) {
 		log.Printf("Lookup: unexpected document shape %T", rawDoc["value"])
 		return nil, false
 	}
-	log.Printf("Lookup: found user map: %v", userMap)
+	log.Printf("Lookup: found user map: %v", userMap["username"])
 	return userMap, true
 }
 
