@@ -1,47 +1,47 @@
 package middleware
 
 import (
-	"fmt"
+	"log"
 	"net/http"
-	"os"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 )
 
 type Claims struct {
-	UserID string
-	Roles  string
+	jwt.RegisteredClaims
+	Subject  string `json:"sub"`      // user ID
+	Username string `json:"username"` // username for convenience
+	// Roles is a list of roles the user has, e.g. ["admin", "user"]
+	Roles []string `json:"roles"`
 }
-
-func (c *Claims) Valid() error {
-	return fmt.Errorf("not implemented, filler struct implements jwt.Claims")
-}
-
-// Secret used to sign JWTs
-var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
 // JWTMiddleware validates the JWT in the Authorization header.
-func JWTMiddleware() gin.HandlerFunc {
+func JWTMiddleware(jwtSecret []byte) gin.HandlerFunc {
+	log.Printf("JWTMiddleware: running ... ")
 	return func(c *gin.Context) {
-		auth := c.GetHeader("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
+
+		tokenString, err := c.Cookie("jwt")
+		if err != nil {
+			log.Printf("JWTMiddleware: no token found in cookie")
+
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
-		tkn := strings.TrimPrefix(auth, "Bearer ")
-
-		token, err := jwt.ParseWithClaims(tkn, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		log.Printf("JWTMiddleware: cookie token: ...%s", tokenString[len(tokenString)-20:])
+		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
+			log.Printf("JWTMiddleware: parsing token with claims: %v", token.Claims)
 			return jwtSecret, nil
 		})
 		if err != nil || !token.Valid {
+			log.Printf("JWTMiddleware: invalid token: (%v) %v", err, token)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-
+		log.Printf("JWTMiddleware: token is valid, claims: %v", token.Claims)
 		claims := token.Claims.(*Claims)
-		c.Set("user_id", claims.UserID)
+		c.Set("user_id", claims.Subject)
+		c.Set("username", claims.RegisteredClaims.Subject)
 		c.Set("roles", claims.Roles)
 		c.Next()
 	}
@@ -50,18 +50,20 @@ func JWTMiddleware() gin.HandlerFunc {
 // RoleMiddleware ensures the user has at least one required role.
 func RoleMiddleware(required ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		r, _ := c.Get("roles")
-		roles := r.([]string)
-
-		for _, req := range required {
+		raw, _ := c.Get("roles")
+		roles, ok := raw.([]string)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid roles"})
+			return
+		}
+		for _, want := range required {
 			for _, have := range roles {
-				if have == req {
+				if have == want {
 					c.Next()
 					return
 				}
 			}
 		}
-
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 	}
 }

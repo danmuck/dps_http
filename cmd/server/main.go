@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/danmuck/dps_http/api/auth"
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/middleware"
 	"github.com/danmuck/dps_http/storage"
@@ -64,19 +65,27 @@ func NewWebServer(cfg *Config) *WebServer {
 }
 
 func (ws *WebServer) registerRoutes() {
-	ug := ws.router.Group("/users")
+	rg := ws.router.Group("/auth")
 	{
-		ug.GET("/", users.ListUsers(ws.store))        // List all users
-		ug.POST("/:id", users.CreateUser(ws.store))   // Create a new user
-		ug.GET("/:username", users.GetUser(ws.store)) // Get user by username
+		rg.POST("/login", auth.LoginHandler(ws.store, ws.cfg.auth.JWTSecret))
+		rg.POST("/logout", auth.LogoutHandler())
+		rg.POST("/register", auth.RegisterHandler(ws.store, ws.cfg.auth.JWTSecret))
+		// rg.GET("/health", storage.ServerHealthHandler(ws.store))
+	}
+	ug := ws.router.Group("/users")
+	ug.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
+	{
+		ug.GET("/", users.ListUsers(ws.store))
+		ug.POST("/:id", users.CreateUser(ws.store))
+		ug.GET("/:username", users.GetUser(ws.store))
 
 		ug.PUT("/:id", users.UpdateUser(ws.store))    // Update user by ID
 		ug.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
 	}
 	dev := ws.router.Group("/dev")
-	dev.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("dev"))
+	dev.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("dev"))
 	admin := ws.router.Group("/admin")
-	admin.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("admin"))
+	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("admin"))
 
 }
 
@@ -112,19 +121,17 @@ func main() {
 
 	server := NewWebServer(cfg)
 	r := server.router
-	// store := server.store
 
 	root := r.Group("/")
 	{
 		root.GET("/", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"message": "Welcome to DPS backend"})
+			c.JSON(http.StatusMovedPermanently, gin.H{"message": "Welcome to DPS backend"})
 		})
-		// root.GET("/health", services.ServerHealthHandler(store))
 	}
 	// r.GET("/prom", gin.WrapH(promhttp.Handler()))
 	//
 	server.registerRoutes()
 
-	// Start server
+	// start server
 	r.Run(cfg.port)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"slices"
-	// "strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,10 +11,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var forbidden []string = []string{
-	"password_hash", "token", "created_at", "updated_at",
-	"bio", "avatar_url", "email",
-}
+// var forbidden []string = []string{
+// 	"password_hash", "token", "created_at", "updated_at",
+// 	"bio", "avatar_url", "email",
+// }
 
 var allowed []string = []string{
 	"username", "roles",
@@ -45,16 +44,51 @@ func (ms *MongoStore) Ping(ctx context.Context) error {
 	return ms.client.Ping(ctx, nil)
 }
 
+// //////////////////////////////////////////////////////////////
+// [Helpers]
+// //////////////////////////////////////////////////////////////
+
+// connectOrCreatBucket connects to an existing bucket or creates a new one if it doesn't exist.
+// It returns the collection for the specified bucket.
+func (ms *MongoStore) connectOrCreatBucket(bucket string) *mongo.Collection {
+	log.Printf("Connect: to bucket: %s", bucket)
+	collection, exists := ms.buckets[bucket]
+	if !exists || collection == nil {
+		log.Println("Connect: creating Bucket:", bucket)
+		collection = ms.db.Collection(bucket)
+		ms.buckets[bucket] = collection
+	}
+	log.Printf("Connect: using collection: %s", collection.Name())
+	return collection
+}
+
+func cleanAndPrefix(filter any) bson.M {
+	fm, ok := filter.(bson.M)
+	if !ok {
+		return bson.M{}
+	}
+
+	out := bson.M{}
+	for key, val := range fm {
+		if slices.Contains(allowed, key) {
+			prefixed := "value." + key
+			log.Printf("cleanAndPrefix: allowing %q → %q", key, prefixed)
+			out[prefixed] = val
+		}
+	}
+	return out
+}
+
 // Basic CRUD operations
 func (ms *MongoStore) Store(bucket string, key string, value any) error {
-	log.Printf("Storing key %q with value %v in bucket %q", key, value, bucket)
+	log.Printf("Storing key %q in bucket %q", key, bucket)
 	collection := ms.connectOrCreatBucket(bucket)
 
 	_, err := collection.InsertOne(context.Background(), map[string]any{
 		"key":   key,
 		"value": value,
 	})
-	log.Printf("Store result: %v", err)
+	log.Printf("Store result: %v (success if <nil>)", err)
 	return err
 }
 
@@ -130,6 +164,7 @@ func (ms *MongoStore) Lookup(bucket string, filter any) (map[string]any, bool) {
 	err := col.FindOne(context.Background(), mongoFilter).Decode(&rawDoc)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
+			log.Printf("Lookup: no document found for filter %v", mongoFilter)
 			return nil, false
 		}
 		log.Printf("Lookup error: %v", err)
@@ -142,6 +177,7 @@ func (ms *MongoStore) Lookup(bucket string, filter any) (map[string]any, bool) {
 		log.Printf("Lookup: unexpected document shape %T", rawDoc["value"])
 		return nil, false
 	}
+	log.Printf("Lookup: found user map: %v", userMap)
 	return userMap, true
 }
 
@@ -165,54 +201,6 @@ func (ms *MongoStore) List(bucket string) ([]any, error) {
 	}
 
 	return results, nil
-}
-
-func cleanForbidden(clean []string, filter any) bson.M {
-	fm, ok := filter.(bson.M)
-	if !ok {
-		return bson.M{}
-	}
-	cleaned := make(bson.M, len(fm))
-	for key, val := range fm {
-		if slices.Contains(clean, key) {
-			log.Printf("Clean: Skipping forbidden key: %s", key)
-			continue
-		}
-		cleaned[key] = val
-	}
-	return cleaned
-}
-
-// cleanAndPrefix takes your incoming filter (bson.M), drops any
-// key not in the whitelist, and outputs a bson.M where each kept
-// key is prefixed with "value." in one pass.
-func cleanAndPrefix(filter any) bson.M {
-	fm, ok := filter.(bson.M)
-	if !ok {
-		return bson.M{}
-	}
-
-	out := bson.M{}
-	for key, val := range fm {
-		if slices.Contains(allowed, key) {
-			prefixed := "value." + key
-			log.Printf("cleanAndPrefix: allowing %q → %q", key, prefixed)
-			out[prefixed] = val
-		}
-	}
-	return out
-}
-
-func (ms *MongoStore) connectOrCreatBucket(bucket string) *mongo.Collection {
-	log.Printf("Connect: to bucket: %s", bucket)
-	collection, exists := ms.buckets[bucket]
-	if !exists || collection == nil {
-		log.Println("Connect: creating Bucket:", bucket)
-		collection = ms.db.Collection(bucket)
-		ms.buckets[bucket] = collection
-	}
-	log.Printf("Connect: using collection: %s", collection.Name())
-	return collection
 }
 
 func NewMongoStore(uri, dbName string) (*MongoStore, error) {

@@ -64,6 +64,95 @@ type createUserPayload struct {
 	// Roles    []string `json:"roles" binding:"required"`
 }
 
+func GetUser(store storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log.Printf("> Getting user by username: %s", c.Param("username"))
+		key := c.Param("username") // you’re using username as the key now
+
+		// retrieve the raw map from storage
+		raw, ok := store.Lookup("users", bson.M{"username": key})
+		if !ok {
+			log.Printf("> User not found: %s", key)
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		log.Printf("> Getting raw user map: %v", raw)
+
+		rawBSON, _ := bson.Marshal(raw)
+		var user User
+		if err := bson.Unmarshal(rawBSON, &user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse user"})
+			return
+		}
+
+		// return the User struct
+		log.Printf("> Got user: %s", user.string())
+		c.JSON(http.StatusOK, user)
+	}
+}
+
+func UpdateUser(store storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var user User
+		if err := c.ShouldBindJSON(&user); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status": "error",
+				"error":  "invalid request body",
+			})
+			return
+		}
+
+		if err := store.Update("users", c.Param("id"), user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "failed to update user",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"user":   user,
+		})
+	}
+}
+
+func DeleteUser(store storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if err := store.Delete("users", c.Param("id")); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "failed to delete user",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"message": "user deleted successfully",
+		})
+	}
+}
+
+func ListUsers(store storage.Storage) gin.HandlerFunc {
+	log.Printf("> Listing users from store: %s", store.Name())
+	return func(c *gin.Context) {
+		users, err := store.List("users")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "failed to retrieve users",
+			})
+			return
+		}
+
+		log.Printf("> Retrieved %d users", len(users))
+		c.JSON(http.StatusOK, users)
+	}
+}
+
+// NOTE:
+// NEEDS TO BE REDIRECTED TO AUTH SERVICE AND LOCKED BEHIND ROLE
 func CreateUser(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload createUserPayload
@@ -131,92 +220,5 @@ func CreateUser(store storage.Storage) gin.HandlerFunc {
 			"status": "ok",
 			"user":   user,
 		})
-	}
-}
-
-func GetUser(store storage.Storage) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		log.Printf("> Getting user by username: %s", c.Param("username"))
-		key := c.Param("username") // you’re using username as the key now
-
-		// retrieve the raw map from storage
-		raw, ok := store.Lookup("users", bson.M{"username": key})
-		if !ok {
-			log.Printf("> User not found: %s", key)
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		log.Printf("> Getting raw user map: %v", raw)
-
-		rawBSON, _ := bson.Marshal(raw)
-		var user User
-		if err := bson.Unmarshal(rawBSON, &user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse user"})
-			return
-		}
-
-		// return the concrete User struct
-		log.Printf("> Got user: %s", user.string())
-		c.JSON(http.StatusOK, user)
-	}
-}
-
-func UpdateUser(store storage.Storage) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var user User
-		if err := c.ShouldBindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status": "error",
-				"error":  "invalid request body",
-			})
-			return
-		}
-
-		if err := store.Update("users", c.Param("id"), user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to update user",
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"user":   user,
-		})
-	}
-}
-
-func DeleteUser(store storage.Storage) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if err := store.Delete("users", c.Param("id")); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to delete user",
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"message": "user deleted successfully",
-		})
-	}
-}
-
-func ListUsers(store storage.Storage) gin.HandlerFunc {
-	log.Printf("> Listing users from store: %s", store.Name())
-	return func(c *gin.Context) {
-		users, err := store.List("users")
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to retrieve users",
-			})
-			return
-		}
-
-		log.Printf("> Retrieved %d users", len(users))
-		c.JSON(http.StatusOK, users)
 	}
 }
