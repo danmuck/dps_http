@@ -1,4 +1,4 @@
 .trash
 .env
 tmp/server
-/tmp
+/tmp/
