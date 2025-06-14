@@ -1,7 +1,7 @@
 package users
 
 import (
-	"encoding/json"
+	// "encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -71,17 +71,17 @@ type createUserPayload struct {
 
 func GetUser(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Printf("GetUser: getting user by username: %s", c.Param("username"))
-		key := c.Param("username") // you’re using username as the key now
+		log.Printf("GetUser: getting %s", c.Param("username"))
+		key := c.Param("username")
 
 		// retrieve the raw map from storage
 		raw, ok := store.Lookup("users", bson.M{"username": key})
 		if !ok {
-			log.Printf("GetUser: user not found: %s", key)
+			log.Printf("GetUser: not found: %s", key)
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		log.Printf("GetUser: getting raw user map: %v", raw["username"])
+		log.Printf("GetUser: raw user map: %v", raw["username"])
 
 		rawBSON, _ := bson.Marshal(raw)
 		var user User
@@ -91,67 +91,66 @@ func GetUser(store storage.Storage) gin.HandlerFunc {
 		}
 
 		// return the User struct
-		log.Printf("GetUser: got user: %s", user.string())
+		log.Printf("GetUser: got user %s", user.string())
 		c.JSON(http.StatusOK, user)
 	}
 }
 
-type updateUserPayload struct {
-	Email     *string `json:"email,omitempty"`
-	Bio       *string `json:"bio,omitempty"`
-	AvatarURL *string `json:"avatarURL,omitempty"`
-}
+// type updateUserPayload struct {
+// 	Email       string `json:"email,omitempty"`
+// 	Bio         string `json:"bio,omitempty"`
+// 	AvatarURL   string `json:"avatarURL,omitempty"`
+// 	NewPassword string `json:"password,omitempty"` // if you want to allow password changes
+// }
 
 func UpdateUser(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		username := c.Param("id")
-		log.Printf("UpdateUser: updating user by username: %s", username)
-		var patch updateUserPayload
+		id := c.Param("id")
+		log.Printf("UpdateUser: updating user %s", id)
+
+		// bind only the updatable fields
+		var patch struct {
+			Email     string `json:"email,omitempty"`
+			Bio       string `json:"bio,omitempty"`
+			AvatarURL string `json:"avatarURL,omitempty"`
+		}
 		if err := c.ShouldBindJSON(&patch); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
 			return
 		}
 
-		// retrieve the exact document by key
-		rawValue, ok := store.Lookup("users", bson.M{"username": username})
-		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		// build a map of just the changed fields
+		updates := map[string]any{}
+		if patch.Email != "" {
+			log.Printf("UpdateUser: patching email to %s", patch.Email)
+			updates["email"] = patch.Email
+		}
+		if patch.Bio != "" {
+			log.Printf("UpdateUser: patching bio to %s", patch.Bio)
+			updates["bio"] = patch.Bio
+		}
+		if patch.AvatarURL != "" {
+			log.Printf("UpdateUser: patching avatarURL to %s", patch.AvatarURL)
+			updates["avatarURL"] = patch.AvatarURL
+		}
+		if len(updates) == 0 {
+			log.Printf("UpdateUser: nothing to update for user %s", id)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
 			return
 		}
-		log.Printf("UpdateUser: retrieved raw user map: %v", rawValue)
-		// note: there must be a better way to do this
-		// convert the rawValue (any) into User struct
-		js, err := json.Marshal(rawValue)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "marshal failure"})
-			return
-		}
-		var existing User
-		if err := json.Unmarshal(js, &existing); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "unmarshal failure"})
-			return
-		}
-		log.Printf("UpdateUser: existing user: %s %v", existing.string(), existing.ID.Hex())
 
-		if patch.Email != nil {
-			existing.Email = *patch.Email
-		}
-		if patch.Bio != nil {
-			existing.Bio = *patch.Bio
-		}
-		if patch.AvatarURL != nil {
-			existing.AvatarURL = *patch.AvatarURL
-		}
-		existing.UpdatedAt = primitive.NewDateTimeFromTime(time.Now())
-
-		// write the full updated user object back under the same key
-		if err := store.Update("users", existing.ID.Hex(), existing); err != nil {
-			log.Printf("UpdateUser: failed to update user %s: %v \n  %v", username, err, existing)
+		// apply the patch
+		if err := store.Patch("users", id, updates); err != nil {
+			log.Printf("UpdateUser: failed to update user %s: %v", id, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
 			return
 		}
 
-		c.JSON(http.StatusOK, existing)
+		// return the updated document (you can re‐fetch with Retrieve)
+		log.Printf("UpdateUser: retreiving updated user %s", id)
+		updated, _ := store.Retrieve("users", id)
+		log.Printf("UpdateUser: updated user %s: %v", id, updated)
+		c.JSON(http.StatusOK, updated)
 	}
 }
 

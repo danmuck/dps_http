@@ -28,6 +28,7 @@ type Storage interface {
 	Retrieve(bucket string, key string) (any, error)
 	Delete(bucket string, key string) error
 	Update(bucket string, key string, value any) error
-	List(bucket string) ([]any, error)                    // List all keys in a bucket``
-	Lookup(bucket string, key any) (map[string]any, bool) // Lookup a specific key in a bucket
+	Patch(bucket, key string, updates map[string]any) error // Patch updates specific fields in a document
+	List(bucket string) ([]any, error)                      // List all keys in a bucket``
+	Lookup(bucket string, key any) (map[string]any, bool)   // Lookup a specific key in a bucket
 }

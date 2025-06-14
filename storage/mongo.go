@@ -140,6 +140,33 @@ func (ms *MongoStore) Update(bucket string, key string, value any) error {
 
 	return nil
 }
+func (ms *MongoStore) Patch(bucket, key string, updates map[string]any) error {
+	log.Printf("Patching key %q in bucket %q with updates: %v", key, bucket, updates)
+	col := ms.connectOrCreatBucket(bucket)
+
+	// Build a $set document that prefixes each field with "value."
+	setDoc := bson.M{}
+	for field, val := range updates {
+		setDoc["value."+field] = val
+	}
+	log.Printf("Patch: using setDoc: %v", setDoc)
+	// Run the update
+	result, err := col.UpdateOne(
+		context.Background(),
+		bson.M{"key": key},
+		bson.M{"$set": setDoc},
+	)
+	if err != nil {
+		log.Printf("Patch error: %v", err)
+		return err
+	}
+	if result.MatchedCount == 0 {
+		log.Printf("Patch: no document matched for key %q in bucket %q", key, bucket)
+		return fmt.Errorf("no document with key=%q in bucket=%q", key, bucket)
+	}
+	log.Printf("Patch: updated %d document(s) for key %q in bucket %q", result.ModifiedCount, key, bucket)
+	return nil
+}
 
 //		Lookup retrieves a specific key in a bucket with a filter
 //
