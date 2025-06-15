@@ -10,6 +10,7 @@ import (
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/middleware"
 	"github.com/danmuck/dps_http/storage"
+	mongodb "github.com/danmuck/dps_http/storage/mongo"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -38,7 +39,7 @@ type WebServer struct {
 }
 
 func NewWebServer(cfg *Config) *WebServer {
-	store, err := storage.NewMongoStore(cfg.db.MongoURI, cfg.db.Name)
+	store, err := mongodb.NewMongoStore(cfg.db.MongoURI, cfg.db.Name)
 	if err != nil {
 		log.Fatalf("failed to connect to MongoDB: %v", err)
 	}

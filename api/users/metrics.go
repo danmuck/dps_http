@@ -13,6 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+const delay = 60 * time.Second
+
 // UserMetricsService is a service that provides user metrics.
 type UserMetricsService struct {
 	version         string
@@ -23,8 +25,28 @@ type UserMetricsService struct {
 	users_over_time map[string]int64
 	total_roles     map[string]int64
 	running         bool
+	b               storage.Bucket
 
 	mu sync.Mutex
+}
+
+func NewUserMetricsService(store storage.Storage) *UserMetricsService {
+	return &UserMetricsService{
+		version:         "1.0.0",
+		endpoint:        "/metrics",
+		store:           store,
+		bucket:          "users",
+		total_users:     0,
+		users_over_time: make(map[string]int64),
+		total_roles:     make(map[string]int64),
+		running:         true,
+	}
+}
+
+func (svc *UserMetricsService) Register(router *gin.Engine) {
+	log.Printf("[api:users] Registering UserMetricsService at %s", svc.endpoint)
+	rg := router.Group(svc.endpoint)
+	rg.GET(svc.endpoint, MetricsHandler(svc.store))
 }
 
 // Point represents a single data point in the time series for user metrics.
@@ -50,6 +72,80 @@ func SortMapByKey(m map[string]int64) []Point {
 	})
 
 	return points
+}
+
+func (svc *UserMetricsService) String() string {
+	return fmt.Sprintf(`
+	UserMetricsService:
+		Version: %s
+		Endpoint: %s
+		Bucket: %s
+		Total Users: %d
+		Total Roles: %v
+		Roles Over Time: %v
+	`,
+		svc.version, svc.endpoint, svc.bucket, svc.total_users, svc.total_roles, svc.users_over_time)
+}
+
+func (svc *UserMetricsService) Stop() {
+	svc.mu.Lock()
+	svc.running = false
+	svc.mu.Unlock()
+	log.Printf("[api:users] UserMetricsService stopped")
+}
+func (svc *UserMetricsService) Start() {
+	svc.mu.Lock()
+	svc.running = true
+	svc.mu.Unlock()
+	go serviceHandler(svc)
+	log.Printf("[api:users] UserMetricsService started")
+}
+func (svc *UserMetricsService) IsRunning() bool {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	return svc.running
+}
+func (svc *UserMetricsService) GetVersion() string {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	return svc.version
+}
+func (svc *UserMetricsService) GetEndpoint() string {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	return svc.endpoint
+}
+func (svc *UserMetricsService) GetBucket() string {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	return svc.bucket
+}
+
+func serviceHandler(svc *UserMetricsService) {
+	log.Printf("[api:users] UserMetricsService is running: %v", svc.IsRunning())
+	if !svc.IsRunning() {
+		log.Printf("[api:users] UserMetricsService is not running, exiting handler")
+		return
+	}
+
+	log.Printf("[api:users] UserMetricsService version: %s", svc.GetVersion())
+	log.Printf("[api:users] UserMetricsService endpoint: %s", svc.GetEndpoint())
+	log.Printf("[api:users] UserMetricsService bucket: %s", svc.GetBucket())
+
+	for svc.IsRunning() {
+		svc.mu.Lock()
+		defer svc.mu.Unlock()
+		log.Printf("[api:users] UserMetricsService is running, processing metrics...")
+		// Here you would typically gather metrics, update the store, etc.
+		total_users, err := svc.store.Count(svc.bucket)
+		if err != nil {
+			log.Printf("[api:users] UserMetricsService failed to retrieve user count: %v", err)
+			return
+		}
+		svc.users_over_time[time.Now().Format(time.Stamp)] = total_users
+		time.Sleep(delay) // simulate work
+		log.Printf("[api:users] UserMetricsService processed metrics")
+	}
 }
 
 // MetricsHandler returns a gin.HandlerFunc that retrieves user metrics.
@@ -90,7 +186,7 @@ func MetricsHandler(store storage.Storage) gin.HandlerFunc {
 		svc.total_users = total_users
 		svc.total_roles = total_roles
 		svc.mu.Lock()
-		svc.users_over_time[time.Now().Format("2006-01-02T15:04:05Z07:00")] = total_users
+		svc.users_over_time[time.Now().Format(time.Stamp)] = total_users
 		svc.mu.Unlock()
 
 		log.Printf("[api:users] Users over time: %v", svc.users_over_time)

@@ -4,28 +4,34 @@ import (
 	"context"
 )
 
-type StorageClient interface {
-	Connect(ctx context.Context) error
-}
-
-type Database interface {
-	Name() string
+//	var forbidden []string = []string{
+//		"password_hash", "token", "created_at", "updated_at",
+//		"bio", "avatar_url", "email",
+//	}
+var allowed []string = []string{
+	"username", "roles",
 }
 
 type Bucket interface {
 	Name() string
+	Store(key string, value any) error
+	Retrieve(key string) (any, error)
+	Delete(key string) error
+	Update(key string, value any) error
+	Patch(key string, updates map[string]any) error // Patch updates specific fields in a document
+	Lookup(key any) (map[string]any, bool)          // Lookup a specific key in a bucket
+	List(bucket string) ([]any, error)              // List all keys in a bucket
+	Count() (int64, error)                          // Count documents in a bucket
 }
 
 type Storage interface {
 	Name() string
+	Location() string
 	Type() string
-	Client() StorageClient
-	Database() Database
 	Ping(ctx context.Context) error
-	Count(bucket string) (int64, error)         // Count documents in a bucket
-	ConnectOrCreateBucket(bucket string) Bucket // Connect to an existing bucket or create a new one if it doesn't exist
 
-	// Basic CRUD operations
+	ConnectOrCreateBucket(bucket string) Bucket // Connect to an existing bucket or create a new one if it doesn't exist
+	// bucket operations
 	Store(bucket string, key string, value any) error
 	Retrieve(bucket string, key string) (any, error)
 	Delete(bucket string, key string) error
@@ -33,4 +39,5 @@ type Storage interface {
 	Patch(bucket, key string, updates map[string]any) error // Patch updates specific fields in a document
 	List(bucket string) ([]any, error)                      // List all keys in a bucket``
 	Lookup(bucket string, key any) (map[string]any, bool)   // Lookup a specific key in a bucket
+	Count(bucket string) (int64, error)                     // Count documents in a bucket
 }
