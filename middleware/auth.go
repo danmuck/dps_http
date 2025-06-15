@@ -64,6 +64,6 @@ func RoleMiddleware(required ...string) gin.HandlerFunc {
 				}
 			}
 		}
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "insufficient permissions"})
 	}
 }

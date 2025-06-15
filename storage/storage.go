@@ -22,6 +22,8 @@ type Storage interface {
 	Client() StorageClient
 	Database() Database
 	Ping(ctx context.Context) error
+	Count(bucket string) (int64, error)         // Count documents in a bucket
+	ConnectOrCreateBucket(bucket string) Bucket // Connect to an existing bucket or create a new one if it doesn't exist
 
 	// Basic CRUD operations
 	Store(bucket string, key string, value any) error

@@ -4,6 +4,7 @@ import (
 	// "encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -60,15 +61,6 @@ func (u *User) string() string {
 
 }
 
-type createUserPayload struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-	Confirm  string `json:"confirm" binding:"required,eqfield=Password"` // confirm password must match
-	// Add more fields as needed
-	// Roles    []string `json:"roles" binding:"required"`
-}
-
 func GetUser(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log.Printf("GetUser: getting %s", c.Param("username"))
@@ -110,9 +102,10 @@ func UpdateUser(store storage.Storage) gin.HandlerFunc {
 
 		// bind only the updatable fields
 		var patch struct {
-			Email     string `json:"email,omitempty"`
-			Bio       string `json:"bio,omitempty"`
-			AvatarURL string `json:"avatarURL,omitempty"`
+			Email     string   `json:"email,omitempty"`
+			Bio       string   `json:"bio,omitempty"`
+			AvatarURL string   `json:"avatarURL,omitempty"`
+			Roles     []string `json:"roles,omitempty"` // if you want to allow role changes
 		}
 		if err := c.ShouldBindJSON(&patch); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
@@ -132,6 +125,10 @@ func UpdateUser(store storage.Storage) gin.HandlerFunc {
 		if patch.AvatarURL != "" {
 			log.Printf("UpdateUser: patching avatarURL to %s", patch.AvatarURL)
 			updates["avatarURL"] = patch.AvatarURL
+		}
+		if len(patch.Roles) > 0 {
+			log.Printf("UpdateUser: patching roles to %v", patch.Roles)
+			updates["roles"] = patch.Roles
 		}
 		if len(updates) == 0 {
 			log.Printf("UpdateUser: nothing to update for user %s", id)
@@ -188,61 +185,55 @@ func ListUsers(store storage.Storage) gin.HandlerFunc {
 	}
 }
 
+// creates a dummy user with random data
 // NOTE:
 // NEEDS TO BE REDIRECTED TO AUTH SERVICE AND LOCKED BEHIND ROLE
 func CreateUser(store storage.Storage) gin.HandlerFunc {
+	log.Printf("[DEV]> CreateUser() initializing with storage: %s", store.Name())
 	return func(c *gin.Context) {
-		var payload createUserPayload
-		if err := c.ShouldBindJSON(&payload); err != nil {
-			log.Printf("> bind error: %v", err)
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
+		var email, username, password string
+		username = c.PostForm("username")
+		log.Printf("[DEV]> CreateUser: received username: %s", username)
+		email = dummyString(8, "@dirtranch.io")
+		password = dummyString(4, "crypt")
+
+		if username == "" || username == "undefined" {
+			log.Printf("[DEV]> No username provided, generating a random one")
+			username = dummyString(4, "dps")
+		}
+		store.Lookup("users", bson.M{"username": username})
+		if _, found := store.Lookup("users", bson.M{"username": username}); found {
+			log.Printf("[DEV]> User %s already exists, generating a new one", username)
+			username = dummyString(4, "dps")
 		}
 
-		if _, exists := store.Lookup("users", bson.M{"username": payload.Username}); exists {
-			c.JSON(http.StatusConflict, gin.H{"error": "username already in use"})
-			return
-		}
-		if _, exists := store.Lookup("users", bson.M{"email": payload.Email}); exists {
-			c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
-			return
-		}
-		log.Printf("> Creating user: %s", payload.Username)
-		//
-		// hash password and prepare user object
-		if payload.Password != payload.Confirm {
-			log.Printf("> Passwords do not match")
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status": "error",
-				"error":  "passwords do not match",
-			})
-			return
-		}
+		log.Printf("[DEV]> Creating user: %s", username)
 
-		hash, err := utils.HashPassword(payload.Password)
+		hash, err := utils.HashPassword(password)
 		if err != nil {
-			log.Printf("> Hashing error: %v", err)
+			log.Printf("[DEV]> Hashing error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status": "error",
 				"error":  "failed to hash password",
 			})
 			return
 		}
-		log.Printf("> Hashed password: %s", hash)
+
+		log.Printf("[DEV]> Hashed password: %s", hash)
 		user := User{
 			ID:           primitive.NewObjectID(),
-			Username:     payload.Username,
-			Email:        payload.Email,
+			Username:     username,
+			Email:        email,
 			PasswordHash: hash,
-			Roles:        []string{"user"},                          // default
-			Token:        "REPLACE_WITH_JWT_TOKEN",                  // placeholder
-			Bio:          "introductory things and stuff",           // optional
-			AvatarURL:    "",                                        // optional
-			CreatedAt:    primitive.NewDateTimeFromTime(time.Now()), // assuming you set this in middleware
-			UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()), // assuming you set this in middleware
+			Roles:        []string{"dummy"},
+			Token:        "DEV_TOKEN",
+			Bio:          "the dev. the creator.. ... ..i'm special",
+			AvatarURL:    "/dm_logo.svg",
+			CreatedAt:    primitive.NewDateTimeFromTime(time.Now()),
+			UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 		}
 
-		log.Printf("> User object: %s", user.string())
+		log.Printf("[DEV]> User object: %s", user.string())
 
 		// Store the user in the database
 		if err := store.Store("users", user.ID.Hex(), user); err != nil {
@@ -253,9 +244,22 @@ func CreateUser(store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{
-			"status": "ok",
-			"user":   user,
-		})
+		c.Redirect(http.StatusFound, "/users/new")
 	}
+}
+
+//		generates a dummy string of given length with a postfix
+//
+//		e.g.
+//			dummyString(8, "@dirtranch.io") -> "ABCDEFZYX@dirtranch.io"
+//	 or 	dummyString(10, ".com") -> "ABCDEFGHIJ.com"
+//
+// //
+func dummyString(length int, postfix string) string {
+	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ01"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return fmt.Sprintf("%s%s", string(b), postfix)
 }

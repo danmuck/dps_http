@@ -44,6 +44,10 @@ func (ms *MongoStore) Database() Database {
 func (ms *MongoStore) Ping(ctx context.Context) error {
 	return ms.client.Ping(ctx, nil)
 }
+func (ms *MongoStore) ConnectOrCreateBucket(bucket string) Bucket {
+	// map the interface, may just fold these
+	return ms.connectOrCreatBucket(bucket)
+}
 
 // //////////////////////////////////////////////////////////////
 // [Helpers]

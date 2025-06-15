@@ -49,7 +49,7 @@ func NewWebServer(cfg *Config) *WebServer {
 	r.Use(gin.Logger(), gin.Recovery())
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
@@ -76,16 +76,22 @@ func (ws *WebServer) registerRoutes() {
 	ug.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
 	{
 		ug.GET("/", users.ListUsers(ws.store))
-		ug.POST("/:id", users.CreateUser(ws.store))
 		ug.GET("/:username", users.GetUser(ws.store))
+		// TODO: dev route should be moved and locked away
+		ug.POST("/:id", users.CreateUser(ws.store))
 
 		ug.PUT("/:id", users.UpdateUser(ws.store))    // Update user by ID
 		ug.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
 	}
+	admin := ws.router.Group("/metrics")
+	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("admin"))
+	{
+		umg := admin.Group("/users")
+		// umg.GET("/roles", users.GetUserByID(ws.store))      // Get user by ID
+		umg.GET("/", users.MetricsHandler(ws.store)) // List all users
+	}
 	dev := ws.router.Group("/dev")
 	dev.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("dev"))
-	admin := ws.router.Group("/admin")
-	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("admin"))
 
 }
 
