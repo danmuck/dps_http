@@ -179,7 +179,7 @@ func ListUsers(store storage.Client) gin.HandlerFunc {
 }
 
 // creates a dummy user with random data
-// NOTE:
+// note:
 // NEEDS TO BE REDIRECTED TO AUTH SERVICE AND LOCKED BEHIND ROLE
 func CreateUser(store storage.Client) gin.HandlerFunc {
 	logs.Log("[DEV]> CreateUser() initializing with storage: %s", store.Name())
@@ -194,7 +194,7 @@ func CreateUser(store storage.Client) gin.HandlerFunc {
 			logs.Log("[DEV]> No username provided, generating a random one")
 			username = dummyString(4, "dps")
 		}
-		store.Lookup("users", bson.M{"username": username})
+
 		if _, found := store.Lookup("users", bson.M{"username": username}); found {
 			logs.Log("[DEV]> User %s already exists, generating a new one", username)
 			username = dummyString(4, "dps")

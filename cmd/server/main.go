@@ -9,6 +9,7 @@ import (
 	"github.com/danmuck/dps_http/api/auth"
 	"github.com/danmuck/dps_http/api/services"
 	"github.com/danmuck/dps_http/api/users"
+	"github.com/danmuck/dps_http/configs"
 	"github.com/danmuck/dps_http/middleware"
 	"github.com/danmuck/dps_http/storage"
 	mongodb "github.com/danmuck/dps_http/storage/mongo"
@@ -19,35 +20,21 @@ import (
 	// ginprom "github.com/zsais/go-gin-prometheus"
 )
 
-type Config struct {
-	domain string
-	port   string
-	db     Storage
-	auth   Auth
-}
-type Storage struct {
-	t        string // type for future expansion default: "mongo"
-	MongoURI string
-	Name     string // database name
-}
-type Auth struct {
-	JWTSecret string
-}
 type WebServer struct {
-	cfg    *Config
+	cfg    *configs.Config
 	router *gin.Engine
 	store  storage.Client
 }
 
-func NewWebServer(cfg *Config) *WebServer {
-	store, err := mongodb.NewMongoStore(cfg.db.MongoURI, cfg.db.Name)
+func NewWebServer(cfg *configs.Config) *WebServer {
+	store, err := mongodb.NewMongoStore(cfg.DB.MongoURI, cfg.DB.Name)
 	if err != nil {
 		log.Fatalf("failed to connect to MongoDB: %v", err)
 	}
 
 	// Initialize Gin --
 	r := gin.Default()
-	r.SetTrustedProxies([]string{"127.0.0.1", cfg.domain})
+	r.SetTrustedProxies([]string{"127.0.0.1", cfg.Domain})
 	r.Use(gin.Logger(), gin.Recovery())
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
@@ -81,13 +68,14 @@ func (ws *WebServer) registerServices() {
 func (ws *WebServer) registerRoutes() {
 	rg := ws.router.Group("/auth")
 	{
-		rg.POST("/login", auth.LoginHandler(ws.store, ws.cfg.auth.JWTSecret))
+		// Auth
+		rg.POST("/login", auth.LoginHandler(ws.store, ws.cfg.Auth.JWTSecret))
 		rg.POST("/logout", auth.LogoutHandler())
-		rg.POST("/register", auth.RegisterHandler(ws.store, ws.cfg.auth.JWTSecret))
+		rg.POST("/register", auth.RegisterHandler(ws.store, ws.cfg.Auth.JWTSecret))
 		// rg.GET("/health", storage.ServerHealthHandler(ws.store))
 	}
 	ug := ws.router.Group("/users")
-	ug.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
+	ug.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
 	{
 		ug.GET("/", users.ListUsers(ws.store))
 		ug.GET("/:username", users.GetUser(ws.store))
@@ -98,16 +86,10 @@ func (ws *WebServer) registerRoutes() {
 		ug.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
 	}
 	admin := ws.router.Group("/metrics")
-	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("admin"))
-	// {
-	// 	umg := admin.Group("/users")
-	// 	// umg.GET("/roles", users.GetUserByID(ws.store))      // Get user by ID
-	// 	umg.GET("/", users.MetricsHandler(
-	// 		ws.store.ConnectOrCreateBucket("users"),
-	// 		ws.store.ConnectOrCreateBucket("metrics"))) // List all users
-	// }
+	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("admin"))
+
 	dev := ws.router.Group("/dev")
-	dev.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("dev"))
+	dev.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("dev"))
 
 	ws.registerServices() // Register all services
 
@@ -129,16 +111,16 @@ func main() {
 	}
 
 	// Load configuration
-	cfg := &Config{
-		domain: "127.0.0.1",
-		port:   ":8080",
-		db: Storage{
+	cfg := &configs.Config{
+		Domain: "127.0.0.1",
+		Port:   ":8080",
+		DB: configs.Storage{
 			// needs to be updated alongside the storage/ api
-			t:        "mongo",
+			T:        "mongo",
 			Name:     "dps_http",
 			MongoURI: os.Getenv("MONGO_URI"),
 		},
-		auth: Auth{
+		Auth: configs.Auth{
 			JWTSecret: os.Getenv("JWT_SECRET"),
 		},
 	}
@@ -152,10 +134,9 @@ func main() {
 			c.JSON(http.StatusMovedPermanently, gin.H{"message": "Welcome to DPS backend"})
 		})
 	}
-	// r.GET("/prom", gin.WrapH(promhttp.Handler()))
-	//
+
 	server.registerRoutes()
 
 	// start server
-	r.Run(cfg.port)
+	r.Run(cfg.Port)
 }

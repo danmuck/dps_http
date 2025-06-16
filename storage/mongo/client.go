@@ -2,7 +2,6 @@ package mongo
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/danmuck/dps_http/api/logs"
@@ -60,14 +59,14 @@ func (ms *MongoClient) Ping(ctx context.Context) error {
 // ConnectOrCreateBucket connects to an existing bucket or creates a new one if it doesn't exist.
 // It returns the collection for the specified bucket.
 func (ms *MongoClient) ConnectOrCreateBucket(bucket string) storage.Bucket {
-	logs.Log("[storage:mongo:client] ConnectOrCreateBucket() %s", bucket)
+	logs.Log("[storage:mongo:client] ConnectOrCreateBucket() [%s]", bucket)
 	collection, exists := ms.buckets[bucket]
 	if !exists || collection == nil {
-		log.Println("[storage:mongo:client] creating bucket: ", bucket)
+		logs.Log("[storage:mongo:client] Create() [%s]", bucket)
 		collection = NewMongoBucket(ms.db, bucket)
 		ms.buckets[bucket] = collection
 	}
-	logs.Log("[storage:mongo:client] connected to bucket: %s", bucket)
+	logs.Log("[storage:mongo:client] Connect() [%s]", bucket)
 	return collection
 }
 
@@ -98,30 +97,30 @@ func (ms *MongoClient) Delete(bucket string, key string) error {
 
 // TODO: implement
 func (ms *MongoClient) Update(bucket string, key string, value any) error {
-	logs.Log("Updating key %q in bucket %q with value: %v", key, bucket, value)
+	logs.Log("[storage:mongo:client] Update() [%q] { %q : %v }", bucket, key, value)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Update(key, value)
 }
 func (ms *MongoClient) Patch(bucket, key string, updates map[string]any) error {
-	logs.Log("Patching key %q in bucket %q with updates: %v", key, bucket, updates)
+	logs.Log("[storage:mongo:client] Patch() [%q] key %q updates: %v", bucket, key, updates)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Patch(key, updates)
 }
 
 func (ms *MongoClient) Lookup(bucket string, filter any) (map[string]any, bool) {
-	logs.Log("Lookup: in bucket %q with filter: %v", bucket, filter)
+	logs.Log("[storage:mongo:client] Lookup() [%q] filter: %v", bucket, filter)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Lookup(filter)
 }
 
 func (ms *MongoClient) List(bucket string) ([]any, error) {
-	log.Println("List: all keys in bucket:", bucket)
+	logs.Log("[storage:mongo:client] List() [%s]", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)
-	return collection.List()
+	return collection.ListKeys()
 }
 
 func (ms *MongoClient) Count(bucket string) (int64, error) {
-	logs.Log("Counting documents in bucket: %s", bucket)
+	logs.Log("[storage:mongo:client] Count() [%s]", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Count()
 }
