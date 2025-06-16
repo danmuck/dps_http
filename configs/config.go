@@ -22,7 +22,7 @@ type Auth struct {
 }
 
 var (
-	METRICS_delay           = 30 * time.Second
+	METRICS_delay           = 300 * time.Second
 	LOGGER_filter           = []string{"api:users"}
 	LOGGER_enable_timestamp = false
 	LOGGER_service_map      = map[string]string{

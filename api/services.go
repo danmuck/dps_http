@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/api/services"
+	"github.com/danmuck/dps_http/api/services/metrics"
 	"github.com/danmuck/dps_http/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -23,16 +24,16 @@ type ServiceReg interface {
 }
 
 type Registry struct {
-	UserMetrics *services.UserMetricsService
+	UserMetrics *metrics.UserMetricsService
 	Health      *services.HealthService
 }
 
 func (r *Registry) registerServices(store storage.Client, router *gin.Engine) {
-	logs.Log("[api:root] Registering services")
+	logs.Info("registering services")
 
 	// User Metrics Service
 	// //
-	r.UserMetrics = services.NewUserMetricsService(
+	r.UserMetrics = metrics.NewUserMetricsService(
 		store.ConnectOrCreateBucket("users"),
 		store.ConnectOrCreateBucket("metrics"),
 	)

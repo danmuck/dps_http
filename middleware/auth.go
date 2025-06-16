@@ -17,27 +17,28 @@ type Claims struct {
 }
 
 // JWTMiddleware validates the JWT in the Authorization header.
+// secret is not passed elsewhere
 func JWTMiddleware(jwtSecret []byte) gin.HandlerFunc {
-	logs.Log("[middleware]:[jwt] JWTMiddleware()")
+	logs.Init("JWTMiddleware")
 	return func(c *gin.Context) {
 
 		tokenString, err := c.Cookie("jwt")
 		if err != nil {
-			logs.Log("[middleware]: no token found in cookie")
+			logs.Err("no token found in cookie")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
-		logs.Log("[middleware]: cookie token: ...%s", tokenString[len(tokenString)-20:])
+		logs.Log("cookie token: ...%s", tokenString[len(tokenString)-20:])
 		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-			logs.Log("[middleware]: parsing token with claims: %v", token.Claims)
+			logs.Err("parsing token with claims: %v", token.Claims)
 			return jwtSecret, nil
 		})
 		if err != nil || !token.Valid {
-			logs.Log("[middleware]: invalid token: (%v) %v", err, token)
+			logs.Err("invalid token: (%v) %v", err, token)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		logs.Log("[middleware]: token is valid, claims: %v", token.Claims)
+		logs.Log("token is valid, claims: %v", token.Claims)
 		claims := token.Claims.(*Claims)
 		c.Set("user_id", claims.Subject)
 		c.Set("username", claims.RegisteredClaims.Subject)
@@ -48,6 +49,7 @@ func JWTMiddleware(jwtSecret []byte) gin.HandlerFunc {
 
 // RoleMiddleware ensures the user has at least one required role.
 func RoleMiddleware(required ...string) gin.HandlerFunc {
+	logs.Init("RoleMiddleware required: %v", required)
 	return func(c *gin.Context) {
 		raw, _ := c.Get("roles")
 		roles, ok := raw.([]string)

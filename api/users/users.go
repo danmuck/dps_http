@@ -96,17 +96,17 @@ func (u *User) string() string {
 
 func GetUser(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		logs.Log("GetUser: getting %s", c.Param("username"))
+		logs.Init("GetUser getting %s", c.Param("username"))
 		key := c.Param("username")
 
 		// retrieve the raw map from storage
 		raw, ok := store.Lookup("users", bson.M{"username": key})
 		if !ok {
-			logs.Log("GetUser: not found: %s", key)
+			logs.Log("not found: %s", key)
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		logs.Log("GetUser: raw user map: %v", raw["username"])
+		logs.Log("raw user map: %v", raw["username"])
 
 		rawBSON, _ := bson.Marshal(raw)
 		var user User
@@ -116,7 +116,7 @@ func GetUser(store storage.Client) gin.HandlerFunc {
 		}
 
 		// return the User struct
-		logs.Log("GetUser: got user %s", user.string())
+		logs.Log("got user %s", user.string())
 		c.JSON(http.StatusOK, user)
 	}
 }
@@ -124,7 +124,7 @@ func GetUser(store storage.Client) gin.HandlerFunc {
 func UpdateUser(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		logs.Log("UpdateUser: updating user %s", id)
+		logs.Init("UpdateUser: updating user %s", id)
 
 		// bind only the updatable fields
 		var patch struct {
@@ -180,6 +180,7 @@ func UpdateUser(store storage.Client) gin.HandlerFunc {
 func DeleteUser(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := store.Delete("users", c.Param("id")); err != nil {
+			logs.Err("DeleteUser: failed to delete user %s: %v", c.Param("id"), err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status": "error",
 				"error":  "failed to delete user",
@@ -195,10 +196,11 @@ func DeleteUser(store storage.Client) gin.HandlerFunc {
 }
 
 func ListUsers(store storage.Client) gin.HandlerFunc {
-	logs.Log("> Listing users from store: %s", store.Name())
+	logs.Init("ListUsers from storage: %s", store.Name())
 	return func(c *gin.Context) {
 		users, err := store.List("users")
 		if err != nil {
+			logs.Err("failed to retrieve users: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status": "error",
 				"error":  "failed to retrieve users",
@@ -206,7 +208,7 @@ func ListUsers(store storage.Client) gin.HandlerFunc {
 			return
 		}
 
-		logs.Log("> Retrieved %d users", len(users))
+		logs.Log("listed %d users", len(users))
 		c.JSON(http.StatusOK, users)
 	}
 }
@@ -215,7 +217,7 @@ func ListUsers(store storage.Client) gin.HandlerFunc {
 // note:
 // NEEDS TO BE REDIRECTED TO AUTH SERVICE AND LOCKED BEHIND ROLE
 func CreateUser(store storage.Client) gin.HandlerFunc {
-	logs.Log("[DEV]> CreateUser() initializing with storage: %s", store.Name())
+	logs.Init("[DEV]> CreateUser() initializing with storage: %s", store.Name())
 	return func(c *gin.Context) {
 		var email, username, password string
 		username = c.PostForm("username")

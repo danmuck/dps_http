@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
-	"github.com/danmuck/dps_http/api/services"
+	"github.com/danmuck/dps_http/api/logs"
+	"github.com/danmuck/dps_http/api/services/metrics"
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/configs"
 	"github.com/danmuck/dps_http/middleware"
@@ -52,7 +53,7 @@ func NewWebServer(cfg *configs.Config) *WebServer {
 
 func (ws *WebServer) registerServices() {
 	log.Println("[api] Registering services")
-	ums := services.NewUserMetricsService(
+	ums := metrics.NewUserMetricsService(
 		ws.store.ConnectOrCreateBucket("users"),
 		ws.store.ConnectOrCreateBucket("metrics"),
 	)
@@ -96,6 +97,7 @@ func init() {
 }
 
 func main() {
+	logs.ColorTest()
 	uri := os.Getenv("MONGO_URI")
 	jwt := os.Getenv("JWT_SECRET")
 	log.Println("Environment: { uri: ", uri, ", jwt: ", jwt, " }")

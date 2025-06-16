@@ -30,10 +30,10 @@ func NewMongoStore(uri, dbName string) (*MongoClient, error) {
 		return nil, err
 	}
 	if err := client.Ping(ctx, nil); err != nil {
-		logs.Log("[storage:mongo:client] failed to connect to MongoDB at %s: %v", uri, err)
+		logs.Log("failed to connect to MongoDB at %s: %v", uri, err)
 		return nil, err
 	}
-	logs.Log("[storage:mongo:client] connecting to MongoDB at %s", uri)
+	logs.Log("connecting to MongoDB at %s", uri)
 	db := client.Database(dbName)
 	return &MongoClient{
 		name:    dbName,
@@ -59,20 +59,20 @@ func (ms *MongoClient) Ping(ctx context.Context) error {
 // ConnectOrCreateBucket connects to an existing bucket or creates a new one if it doesn't exist.
 // It returns the collection for the specified bucket.
 func (ms *MongoClient) ConnectOrCreateBucket(bucket string) storage.Bucket {
-	logs.Log("[storage:mongo:client] ConnectOrCreateBucket() [%s]", bucket)
+	logs.Init("ConnectOrCreateBucket [%s]", bucket)
 	collection, exists := ms.buckets[bucket]
 	if !exists || collection == nil {
-		logs.Log("[storage:mongo:client] Create() [%s]", bucket)
+		logs.Log("Create [%s]", bucket)
 		collection = NewMongoBucket(ms.db, bucket)
 		ms.buckets[bucket] = collection
 	}
-	logs.Log("[storage:mongo:client] Connect() [%s]", bucket)
+	logs.Log("Connect [%s]", bucket)
 	return collection
 }
 
 // basic CRUD operations
 func (ms *MongoClient) Store(bucket string, key string, value any) error {
-	logs.Log("[storage:mongo:client] Store() [%q] : { %q : %q }", bucket, key, value)
+	logs.Init("Store [%q] : { %q : %q }", bucket, key, value)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	err := collection.Store(key, value)
 	logs.Log("Store result: %v (success if <nil>)", err)
@@ -83,13 +83,14 @@ func (ms *MongoClient) Store(bucket string, key string, value any) error {
 // note: this wraps Lookup() with a specific filter for the key
 // it returns the value directly as `any` type
 func (ms *MongoClient) Retrieve(bucket string, key string) (any, error) {
-	logs.Log("[storage:mongo:client] Retrieve() [%q] : { %q }", bucket, key)
+	logs.Init("Retrieve [%q] : { %q }", bucket, key)
 	result, _ := ms.Lookup(bucket, bson.M{"key": key})
 	return result["value"], nil
 }
 
 // TODO: implement
 func (ms *MongoClient) Delete(bucket string, key string) error {
+	logs.Init("Delete [%q] key %q", bucket, key)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	err := collection.Delete(key)
 	return err
@@ -97,30 +98,30 @@ func (ms *MongoClient) Delete(bucket string, key string) error {
 
 // TODO: implement
 func (ms *MongoClient) Update(bucket string, key string, value any) error {
-	logs.Log("[storage:mongo:client] Update() [%q] { %q : %v }", bucket, key, value)
+	logs.Init("Update [%q] { %q : %v }", bucket, key, value)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Update(key, value)
 }
 func (ms *MongoClient) Patch(bucket, key string, updates map[string]any) error {
-	logs.Log("[storage:mongo:client] Patch() [%q] key %q updates: %v", bucket, key, updates)
+	logs.Init("Patch [%q] key %q updates: %v", bucket, key, updates)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Patch(key, updates)
 }
 
 func (ms *MongoClient) Lookup(bucket string, filter any) (map[string]any, bool) {
-	logs.Log("[storage:mongo:client] Lookup() [%q] filter: %v", bucket, filter)
+	logs.Init("Lookup [%q] filter: %v", bucket, filter)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Lookup(filter)
 }
 
 func (ms *MongoClient) List(bucket string) ([]any, error) {
-	logs.Log("[storage:mongo:client] List() [%s]", bucket)
+	logs.Init("List [%s]", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.ListKeys()
 }
 
 func (ms *MongoClient) Count(bucket string) (int64, error) {
-	logs.Log("[storage:mongo:client] Count() [%s]", bucket)
+	logs.Init("Count [%s]", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Count()
 }

@@ -17,13 +17,13 @@ func CleanAndPrefix(filter any) bson.M {
 	for key, val := range fm {
 		if key == "key" {
 			// special case for "key" to avoid prefixing
-			logs.Log("[utils] allowing key %q without prefix", key)
+			logs.Log("allowing key %q without prefix", key)
 			out[key] = val
 			continue
 		}
 		if slices.Contains(allowed, key) {
 			prefixed := "value." + key
-			logs.Log("[utils] allowing %q → %q", key, prefixed)
+			logs.Log("allowing %q → %q", key, prefixed)
 			out[prefixed] = val
 		}
 	}
