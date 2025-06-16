@@ -16,8 +16,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	// "github.com/prometheus/client_golang/prometheus/promhttp"
-	// ginprom "github.com/zsais/go-gin-prometheus"
 )
 
 type WebServer struct {
@@ -32,7 +30,6 @@ func NewWebServer(cfg *configs.Config) *WebServer {
 		log.Fatalf("failed to connect to MongoDB: %v", err)
 	}
 
-	// Initialize Gin --
 	r := gin.Default()
 	r.SetTrustedProxies([]string{"127.0.0.1", cfg.Domain})
 	r.Use(gin.Logger(), gin.Recovery())
@@ -54,9 +51,7 @@ func NewWebServer(cfg *configs.Config) *WebServer {
 }
 
 func (ws *WebServer) registerServices() {
-	// Register services
 	log.Println("[api] Registering services")
-	// UserMetricsService
 	ums := services.NewUserMetricsService(
 		ws.store.ConnectOrCreateBucket("users"),
 		ws.store.ConnectOrCreateBucket("metrics"),
@@ -68,22 +63,19 @@ func (ws *WebServer) registerServices() {
 func (ws *WebServer) registerRoutes() {
 	rg := ws.router.Group("/auth")
 	{
-		// Auth
 		rg.POST("/login", auth.LoginHandler(ws.store, ws.cfg.Auth.JWTSecret))
 		rg.POST("/logout", auth.LogoutHandler())
 		rg.POST("/register", auth.RegisterHandler(ws.store, ws.cfg.Auth.JWTSecret))
-		// rg.GET("/health", storage.ServerHealthHandler(ws.store))
 	}
 	ug := ws.router.Group("/users")
 	ug.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
 	{
 		ug.GET("/", users.ListUsers(ws.store))
 		ug.GET("/:username", users.GetUser(ws.store))
-		// TODO: dev route should be moved and locked away
-		ug.POST("/:id", users.CreateUser(ws.store))
-
 		ug.PUT("/:id", users.UpdateUser(ws.store))    // Update user by ID
 		ug.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
+		// TODO: dev route should be moved and locked away
+		ug.POST("/:id", users.CreateUser(ws.store))
 	}
 	admin := ws.router.Group("/metrics")
 	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("admin"))
@@ -91,7 +83,8 @@ func (ws *WebServer) registerRoutes() {
 	dev := ws.router.Group("/dev")
 	dev.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("dev"))
 
-	ws.registerServices() // Register all services
+	// note: register all services
+	ws.registerServices()
 
 }
 
@@ -110,12 +103,10 @@ func main() {
 		log.Fatal("MONGO_URI and JWT_SECRET must be set in environment variables or .env file")
 	}
 
-	// Load configuration
 	cfg := &configs.Config{
 		Domain: "127.0.0.1",
 		Port:   ":8080",
 		DB: configs.Storage{
-			// needs to be updated alongside the storage/ api
 			T:        "mongo",
 			Name:     "dps_http",
 			MongoURI: os.Getenv("MONGO_URI"),
@@ -136,7 +127,5 @@ func main() {
 	}
 
 	server.registerRoutes()
-
-	// start server
 	r.Run(cfg.Port)
 }

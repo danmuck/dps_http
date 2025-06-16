@@ -14,12 +14,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// func logs.Log(format string, v ...any) {
-// 	if strings.Contains(format, "api:users:metrics") {
-// 		log.Printf(format, v...)
-// 	}
-// }
-
 // UserMetricsService is a service that provides user metrics.
 type UserMetricsService struct {
 	version         string
