@@ -79,12 +79,12 @@ func Log(format string, v ...any) {
 		}
 	}
 
-	// if LogFilter(format, configs.LOGGER_filter...) {
-	if configs.LOGGER_enable_timestamp {
-		fmt.Printf("%s:%s", log.t.Format(time.Stamp), log.msg)
-	} else {
-		fmt.Printf("%s", log.msg)
+	if LogFilter(format, configs.LOGGER_filter...) {
+		if configs.LOGGER_enable_timestamp {
+			fmt.Printf("%s:%s", log.t.Format(time.Stamp), log.msg)
+		} else {
+			fmt.Printf("%s", log.msg)
+		}
+		fmt.Println()
 	}
-	fmt.Println()
-	// }
 }
