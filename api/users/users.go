@@ -3,11 +3,11 @@ package users
 import (
 	// "encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"time"
 
+	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/api/utils"
 	"github.com/danmuck/dps_http/storage"
 	"github.com/gin-gonic/gin"
@@ -61,19 +61,19 @@ func (u *User) string() string {
 
 }
 
-func GetUser(store storage.Storage) gin.HandlerFunc {
+func GetUser(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Printf("GetUser: getting %s", c.Param("username"))
+		logs.Log("GetUser: getting %s", c.Param("username"))
 		key := c.Param("username")
 
 		// retrieve the raw map from storage
 		raw, ok := store.Lookup("users", bson.M{"username": key})
 		if !ok {
-			log.Printf("GetUser: not found: %s", key)
+			logs.Log("GetUser: not found: %s", key)
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		log.Printf("GetUser: raw user map: %v", raw["username"])
+		logs.Log("GetUser: raw user map: %v", raw["username"])
 
 		rawBSON, _ := bson.Marshal(raw)
 		var user User
@@ -83,22 +83,15 @@ func GetUser(store storage.Storage) gin.HandlerFunc {
 		}
 
 		// return the User struct
-		log.Printf("GetUser: got user %s", user.string())
+		logs.Log("GetUser: got user %s", user.string())
 		c.JSON(http.StatusOK, user)
 	}
 }
 
-// type updateUserPayload struct {
-// 	Email       string `json:"email,omitempty"`
-// 	Bio         string `json:"bio,omitempty"`
-// 	AvatarURL   string `json:"avatarURL,omitempty"`
-// 	NewPassword string `json:"password,omitempty"` // if you want to allow password changes
-// }
-
-func UpdateUser(store storage.Storage) gin.HandlerFunc {
+func UpdateUser(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		log.Printf("UpdateUser: updating user %s", id)
+		logs.Log("UpdateUser: updating user %s", id)
 
 		// bind only the updatable fields
 		var patch struct {
@@ -115,43 +108,43 @@ func UpdateUser(store storage.Storage) gin.HandlerFunc {
 		// build a map of just the changed fields
 		updates := map[string]any{}
 		if patch.Email != "" {
-			log.Printf("UpdateUser: patching email to %s", patch.Email)
+			logs.Log("UpdateUser: patching email to %s", patch.Email)
 			updates["email"] = patch.Email
 		}
 		if patch.Bio != "" {
-			log.Printf("UpdateUser: patching bio to %s", patch.Bio)
+			logs.Log("UpdateUser: patching bio to %s", patch.Bio)
 			updates["bio"] = patch.Bio
 		}
 		if patch.AvatarURL != "" {
-			log.Printf("UpdateUser: patching avatarURL to %s", patch.AvatarURL)
+			logs.Log("UpdateUser: patching avatarURL to %s", patch.AvatarURL)
 			updates["avatarURL"] = patch.AvatarURL
 		}
 		if len(patch.Roles) > 0 {
-			log.Printf("UpdateUser: patching roles to %v", patch.Roles)
+			logs.Log("UpdateUser: patching roles to %v", patch.Roles)
 			updates["roles"] = patch.Roles
 		}
 		if len(updates) == 0 {
-			log.Printf("UpdateUser: nothing to update for user %s", id)
+			logs.Log("UpdateUser: nothing to update for user %s", id)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
 			return
 		}
 
 		// apply the patch
 		if err := store.Patch("users", id, updates); err != nil {
-			log.Printf("UpdateUser: failed to update user %s: %v", id, err)
+			logs.Log("UpdateUser: failed to update user %s: %v", id, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
 			return
 		}
 
 		// return the updated document (you can re‐fetch with Retrieve)
-		log.Printf("UpdateUser: retreiving updated user %s", id)
+		logs.Log("UpdateUser: retreiving updated user %s", id)
 		updated, _ := store.Retrieve("users", id)
-		log.Printf("UpdateUser: updated user %s: %v", id, updated)
+		logs.Log("UpdateUser: updated user %s: %v", id, updated)
 		c.JSON(http.StatusOK, updated)
 	}
 }
 
-func DeleteUser(store storage.Storage) gin.HandlerFunc {
+func DeleteUser(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := store.Delete("users", c.Param("id")); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -168,8 +161,8 @@ func DeleteUser(store storage.Storage) gin.HandlerFunc {
 	}
 }
 
-func ListUsers(store storage.Storage) gin.HandlerFunc {
-	log.Printf("> Listing users from store: %s", store.Name())
+func ListUsers(store storage.Client) gin.HandlerFunc {
+	logs.Log("> Listing users from store: %s", store.Name())
 	return func(c *gin.Context) {
 		users, err := store.List("users")
 		if err != nil {
@@ -180,7 +173,7 @@ func ListUsers(store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		log.Printf("> Retrieved %d users", len(users))
+		logs.Log("> Retrieved %d users", len(users))
 		c.JSON(http.StatusOK, users)
 	}
 }
@@ -188,30 +181,30 @@ func ListUsers(store storage.Storage) gin.HandlerFunc {
 // creates a dummy user with random data
 // NOTE:
 // NEEDS TO BE REDIRECTED TO AUTH SERVICE AND LOCKED BEHIND ROLE
-func CreateUser(store storage.Storage) gin.HandlerFunc {
-	log.Printf("[DEV]> CreateUser() initializing with storage: %s", store.Name())
+func CreateUser(store storage.Client) gin.HandlerFunc {
+	logs.Log("[DEV]> CreateUser() initializing with storage: %s", store.Name())
 	return func(c *gin.Context) {
 		var email, username, password string
 		username = c.PostForm("username")
-		log.Printf("[DEV]> CreateUser: received username: %s", username)
+		logs.Log("[DEV]> CreateUser: received username: %s", username)
 		email = dummyString(8, "@dirtranch.io")
 		password = dummyString(4, "crypt")
 
 		if username == "" || username == "undefined" {
-			log.Printf("[DEV]> No username provided, generating a random one")
+			logs.Log("[DEV]> No username provided, generating a random one")
 			username = dummyString(4, "dps")
 		}
 		store.Lookup("users", bson.M{"username": username})
 		if _, found := store.Lookup("users", bson.M{"username": username}); found {
-			log.Printf("[DEV]> User %s already exists, generating a new one", username)
+			logs.Log("[DEV]> User %s already exists, generating a new one", username)
 			username = dummyString(4, "dps")
 		}
 
-		log.Printf("[DEV]> Creating user: %s", username)
+		logs.Log("[DEV]> Creating user: %s", username)
 
 		hash, err := utils.HashPassword(password)
 		if err != nil {
-			log.Printf("[DEV]> Hashing error: %v", err)
+			logs.Log("[DEV]> Hashing error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status": "error",
 				"error":  "failed to hash password",
@@ -219,7 +212,7 @@ func CreateUser(store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		log.Printf("[DEV]> Hashed password: %s", hash)
+		logs.Log("[DEV]> Hashed password: %s", hash)
 		user := User{
 			ID:           primitive.NewObjectID(),
 			Username:     username,
@@ -233,7 +226,7 @@ func CreateUser(store storage.Storage) gin.HandlerFunc {
 			UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 		}
 
-		log.Printf("[DEV]> User object: %s", user.string())
+		logs.Log("[DEV]> User object: %s", user.string())
 
 		// Store the user in the database
 		if err := store.Store("users", user.ID.Hex(), user); err != nil {
@@ -248,13 +241,6 @@ func CreateUser(store storage.Storage) gin.HandlerFunc {
 	}
 }
 
-//		generates a dummy string of given length with a postfix
-//
-//		e.g.
-//			dummyString(8, "@dirtranch.io") -> "ABCDEFZYX@dirtranch.io"
-//	 or 	dummyString(10, ".com") -> "ABCDEFGHIJ.com"
-//
-// //
 func dummyString(length int, postfix string) string {
 	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ01"
 	b := make([]byte, length)

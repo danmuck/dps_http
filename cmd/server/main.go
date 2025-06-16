@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
+	"github.com/danmuck/dps_http/api/services"
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/middleware"
 	"github.com/danmuck/dps_http/storage"
@@ -35,7 +36,7 @@ type Auth struct {
 type WebServer struct {
 	cfg    *Config
 	router *gin.Engine
-	store  storage.Storage
+	store  storage.Client
 }
 
 func NewWebServer(cfg *Config) *WebServer {
@@ -65,6 +66,18 @@ func NewWebServer(cfg *Config) *WebServer {
 	return ws
 }
 
+func (ws *WebServer) registerServices() {
+	// Register services
+	log.Println("[api] Registering services")
+	// UserMetricsService
+	ums := services.NewUserMetricsService(
+		ws.store.ConnectOrCreateBucket("users"),
+		ws.store.ConnectOrCreateBucket("metrics"),
+	)
+	ums.Register(ws.router)
+	ums.Start()
+}
+
 func (ws *WebServer) registerRoutes() {
 	rg := ws.router.Group("/auth")
 	{
@@ -86,13 +99,17 @@ func (ws *WebServer) registerRoutes() {
 	}
 	admin := ws.router.Group("/metrics")
 	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("admin"))
-	{
-		umg := admin.Group("/users")
-		// umg.GET("/roles", users.GetUserByID(ws.store))      // Get user by ID
-		umg.GET("/", users.MetricsHandler(ws.store)) // List all users
-	}
+	// {
+	// 	umg := admin.Group("/users")
+	// 	// umg.GET("/roles", users.GetUserByID(ws.store))      // Get user by ID
+	// 	umg.GET("/", users.MetricsHandler(
+	// 		ws.store.ConnectOrCreateBucket("users"),
+	// 		ws.store.ConnectOrCreateBucket("metrics"))) // List all users
+	// }
 	dev := ws.router.Group("/dev")
 	dev.Use(middleware.JWTMiddleware([]byte(ws.cfg.auth.JWTSecret)), middleware.RoleMiddleware("dev"))
+
+	ws.registerServices() // Register all services
 
 }
 

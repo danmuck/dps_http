@@ -1,4 +1,4 @@
-package api
+package services
 
 import (
 	"context"
@@ -33,7 +33,7 @@ func (s *HealthService) Register(r *gin.Engine) {
 }
 
 // Handler returns 200 OK only if Mongo is reachable within timeout.
-func ServerHealthHandler(store storage.Storage) gin.HandlerFunc {
+func ServerHealthHandler(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()

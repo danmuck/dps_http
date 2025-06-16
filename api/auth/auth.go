@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"log"
 	"net/http"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/api/utils"
 	"github.com/danmuck/dps_http/storage"
@@ -42,11 +42,11 @@ type loginPayload struct {
 // If there are validation errors or uniqueness conflicts, it returns appropriate error responses.
 // It uses the provided storage interface to interact with the user data.
 // The JWT secret is used to sign the token, and it should be kept secure.
-func RegisterHandler(store storage.Storage, jwtSecret string) gin.HandlerFunc {
-	log.Printf("RegisterHandler: initializing with JWT secret: %s", jwtSecret)
-	log.Printf("RegisterHandler: using storage type: %s", store.Type())
-	log.Printf("RegisterHandler: using storage name: %s", store.Name())
-	log.Printf("RegisterHandler: using storage: %T", store)
+func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
+	logs.Log("RegisterHandler: initializing with JWT secret: %s", jwtSecret)
+	logs.Log("RegisterHandler: using storage type: %s", store.Type())
+	logs.Log("RegisterHandler: using storage name: %s", store.Name())
+	logs.Log("RegisterHandler: using storage: %T", store)
 	return func(c *gin.Context) {
 
 		var in registerPayload
@@ -78,7 +78,7 @@ func RegisterHandler(store storage.Storage, jwtSecret string) gin.HandlerFunc {
 
 		roles := []string{"user"}
 		if in.Username == "admin" || in.Username == "dirtpig" {
-			log.Printf("RegisterHandler: assigning admin role to user: %s", in.Username)
+			logs.Log("RegisterHandler: assigning admin role to user: %s", in.Username)
 			roles = append(roles, "admin")
 		}
 		user := users.User{
@@ -92,20 +92,20 @@ func RegisterHandler(store storage.Storage, jwtSecret string) gin.HandlerFunc {
 			CreatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 			UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 		}
-		log.Printf("RegisterHandler: creating user: %s", user.Username)
+		logs.Log("RegisterHandler: creating user: %s", user.Username)
 		// sign jwt
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"sub":   user.ID.Hex(),
 			"roles": user.Roles,
 			"exp":   time.Now().Add(24 * time.Hour).Unix(),
 		})
-		log.Printf("RegisterHandler: signing token for user: %s", user.Username)
+		logs.Log("RegisterHandler: signing token for user: %s", user.Username)
 		tokenString, err := token.SignedString([]byte(jwtSecret))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign token"})
 			return
 		}
-		log.Printf("RegisterHandler: token signed successfully for user: %s \n  %v", user.Username, tokenString)
+		logs.Log("RegisterHandler: token signed successfully for user: %s \n  %v", user.Username, tokenString)
 		// store under username
 		// user.Token = tokenString
 		if err := store.Store("users", user.ID.Hex(), user); err != nil {
@@ -127,38 +127,38 @@ func RegisterHandler(store storage.Storage, jwtSecret string) gin.HandlerFunc {
 // LoginHandler handles user login.
 // It validates the input, looks up the user by username,
 // checks the password against the stored hash, and signs a JWT token.
-func LoginHandler(store storage.Storage, jwtSecret string) gin.HandlerFunc {
-	log.Printf("LoginHandler: initializing with JWT secret: %s", jwtSecret)
-	log.Printf("LoginHandler: using storage type: %s", store.Type())
-	log.Printf("LoginHandler: using storage name: %s", store.Name())
+func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
+	logs.Log("LoginHandler: initializing with JWT secret: %s", jwtSecret)
+	logs.Log("LoginHandler: using storage type: %s", store.Type())
+	logs.Log("LoginHandler: using storage name: %s", store.Name())
 	return func(c *gin.Context) {
 		var in loginPayload
 		if err := c.ShouldBindJSON(&in); err != nil {
-			log.Printf("LoginHandler: bind error: %v", err)
+			logs.Log("LoginHandler: bind error: %v", err)
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 
 		// lookup user by username
-		log.Printf("LoginHandler: received login request for user: %s", in.Username)
+		logs.Log("LoginHandler: received login request for user: %s", in.Username)
 		raw, found := store.Lookup("users", bson.M{"username": in.Username})
 		if !found {
-			log.Printf("LoginHandler: user not found: %s", in.Username)
+			logs.Log("LoginHandler: user not found: %s", in.Username)
 			c.JSON(401, gin.H{"error": "invalid credentials"})
 			return
 		}
-		log.Printf("LoginHandler: user found: %s", in.Username)
+		logs.Log("LoginHandler: user found: %s", in.Username)
 		var user users.User
 		data, _ := bson.Marshal(raw)
 		if err := bson.Unmarshal(data, &user); err != nil {
-			log.Printf("LoginHandler: unmarshal error: %v", err)
+			logs.Log("LoginHandler: unmarshal error: %v", err)
 			c.JSON(500, gin.H{"error": "server error"})
 			return
 		}
 
 		// validate password against stored hash
 		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(in.Password)) != nil {
-			log.Printf("LoginHandler: invalid password for user: %s", in.Username)
+			logs.Log("LoginHandler: invalid password for user: %s", in.Username)
 			c.JSON(401, gin.H{"error": "invalid credentials"})
 			return
 		}
@@ -172,12 +172,12 @@ func LoginHandler(store storage.Storage, jwtSecret string) gin.HandlerFunc {
 		})
 		signed, err := token.SignedString([]byte(jwtSecret))
 		if err != nil {
-			log.Printf("LoginHandler: failed to sign token for user %s: %v", user.Username, err)
+			logs.Log("LoginHandler: failed to sign token for user %s: %v", user.Username, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign token"})
 			return
 		}
 
-		log.Printf("LoginHandler: token signed successfully for user: %s \n  ...%v with hash: %s",
+		logs.Log("LoginHandler: token signed successfully for user: %s \n  ...%v with hash: %s",
 			user.Username, signed[len(signed)-20:], jwtSecret)
 
 		c.SetCookie("jwt", signed, 3600*24, "/", "", true, true)
@@ -192,7 +192,7 @@ func LoginHandler(store storage.Storage, jwtSecret string) gin.HandlerFunc {
 // note: It does not invalidate the JWT on the server side, but removes it from the client.
 func LogoutHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Printf("LogoutHandler: clearing JWT cookie")
+		logs.Log("LogoutHandler: clearing JWT cookie")
 		c.SetCookie("jwt", "", -1, "/", "", true, true)
 		c.SetCookie("username", "", -1, "/", "", true, false)
 		c.JSON(http.StatusOK, gin.H{"status": "logged out"})

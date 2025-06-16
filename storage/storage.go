@@ -20,11 +20,12 @@ type Bucket interface {
 	Update(key string, value any) error
 	Patch(key string, updates map[string]any) error // Patch updates specific fields in a document
 	Lookup(key any) (map[string]any, bool)          // Lookup a specific key in a bucket
-	List(bucket string) ([]any, error)              // List all keys in a bucket
+	List() ([]any, error)                           // List all keys in a bucket
+	ListItems() ([]map[string]any, error)           // List all items in a bucket
 	Count() (int64, error)                          // Count documents in a bucket
 }
 
-type Storage interface {
+type Client interface {
 	Name() string
 	Location() string
 	Type() string

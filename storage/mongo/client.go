@@ -5,13 +5,14 @@ import (
 	"log"
 	"time"
 
+	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type MongoStore struct {
+type MongoClient struct {
 	name     string
 	location string
 	t        string // e.g., "MongoDB"
@@ -20,7 +21,7 @@ type MongoStore struct {
 	buckets  map[string]*MongoBucket
 }
 
-func NewMongoStore(uri, dbName string) (*MongoStore, error) {
+func NewMongoStore(uri, dbName string) (*MongoClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -29,14 +30,13 @@ func NewMongoStore(uri, dbName string) (*MongoStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println("pinging ...")
 	if err := client.Ping(ctx, nil); err != nil {
-		log.Println("failed to ping MongoDB:", err)
+		logs.Log("[storage:mongo:client] failed to connect to MongoDB at %s: %v", uri, err)
 		return nil, err
 	}
-	log.Println("connected to MongoDB at", uri)
+	logs.Log("[storage:mongo:client] connecting to MongoDB at %s", uri)
 	db := client.Database(dbName)
-	return &MongoStore{
+	return &MongoClient{
 		name:    dbName,
 		t:       "mongo",
 		client:  client,
@@ -44,84 +44,84 @@ func NewMongoStore(uri, dbName string) (*MongoStore, error) {
 		buckets: make(map[string]*MongoBucket),
 	}, nil
 }
-func (ms *MongoStore) Name() string {
+func (ms *MongoClient) Name() string {
 	return ms.name
 }
-func (ms *MongoStore) Type() string {
+func (ms *MongoClient) Type() string {
 	return ms.t
 }
-func (md *MongoStore) Location() string {
+func (md *MongoClient) Location() string {
 	return md.location
 }
-func (ms *MongoStore) Ping(ctx context.Context) error {
+func (ms *MongoClient) Ping(ctx context.Context) error {
 	return ms.client.Ping(ctx, nil)
 }
 
 // ConnectOrCreateBucket connects to an existing bucket or creates a new one if it doesn't exist.
 // It returns the collection for the specified bucket.
-func (ms *MongoStore) ConnectOrCreateBucket(bucket string) storage.Bucket {
-	log.Printf("Connect: to bucket: %s", bucket)
+func (ms *MongoClient) ConnectOrCreateBucket(bucket string) storage.Bucket {
+	logs.Log("[storage:mongo:client] ConnectOrCreateBucket() %s", bucket)
 	collection, exists := ms.buckets[bucket]
 	if !exists || collection == nil {
-		log.Println("Connect: creating Bucket:", bucket)
+		log.Println("[storage:mongo:client] creating bucket: ", bucket)
 		collection = NewMongoBucket(ms.db, bucket)
 		ms.buckets[bucket] = collection
 	}
-	log.Printf("Connect: using collection: %s", collection.Name())
+	logs.Log("[storage:mongo:client] connected to bucket: %s", bucket)
 	return collection
 }
 
 // basic CRUD operations
-func (ms *MongoStore) Store(bucket string, key string, value any) error {
-	log.Printf("Storing key %q in bucket %q", key, bucket)
+func (ms *MongoClient) Store(bucket string, key string, value any) error {
+	logs.Log("[storage:mongo:client] Store() [%q] : { %q : %q }", bucket, key, value)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	err := collection.Store(key, value)
-	log.Printf("Store result: %v (success if <nil>)", err)
+	logs.Log("Store result: %v (success if <nil>)", err)
 	return err
 }
 
 // retreieves a value by key from a bucket
 // note: this wraps Lookup() with a specific filter for the key
 // it returns the value directly as `any` type
-func (ms *MongoStore) Retrieve(bucket string, key string) (any, error) {
-	log.Printf("Retrieving key %q from bucket %q", key, bucket)
+func (ms *MongoClient) Retrieve(bucket string, key string) (any, error) {
+	logs.Log("[storage:mongo:client] Retrieve() [%q] : { %q }", bucket, key)
 	result, _ := ms.Lookup(bucket, bson.M{"key": key})
 	return result["value"], nil
 }
 
 // TODO: implement
-func (ms *MongoStore) Delete(bucket string, key string) error {
+func (ms *MongoClient) Delete(bucket string, key string) error {
 	collection := ms.ConnectOrCreateBucket(bucket)
 	err := collection.Delete(key)
 	return err
 }
 
 // TODO: implement
-func (ms *MongoStore) Update(bucket string, key string, value any) error {
-	log.Printf("Updating key %q in bucket %q with value: %v", key, bucket, value)
+func (ms *MongoClient) Update(bucket string, key string, value any) error {
+	logs.Log("Updating key %q in bucket %q with value: %v", key, bucket, value)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Update(key, value)
 }
-func (ms *MongoStore) Patch(bucket, key string, updates map[string]any) error {
-	log.Printf("Patching key %q in bucket %q with updates: %v", key, bucket, updates)
+func (ms *MongoClient) Patch(bucket, key string, updates map[string]any) error {
+	logs.Log("Patching key %q in bucket %q with updates: %v", key, bucket, updates)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Patch(key, updates)
 }
 
-func (ms *MongoStore) Lookup(bucket string, filter any) (map[string]any, bool) {
-	log.Printf("Lookup: in bucket %q with filter: %v", bucket, filter)
+func (ms *MongoClient) Lookup(bucket string, filter any) (map[string]any, bool) {
+	logs.Log("Lookup: in bucket %q with filter: %v", bucket, filter)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Lookup(filter)
 }
 
-func (ms *MongoStore) List(bucket string) ([]any, error) {
+func (ms *MongoClient) List(bucket string) ([]any, error) {
 	log.Println("List: all keys in bucket:", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)
-	return collection.List(bucket)
+	return collection.List()
 }
 
-func (ms *MongoStore) Count(bucket string) (int64, error) {
-	log.Printf("Counting documents in bucket: %s", bucket)
+func (ms *MongoClient) Count(bucket string) (int64, error) {
+	logs.Log("Counting documents in bucket: %s", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Count()
 }

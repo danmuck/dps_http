@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 
+	"github.com/danmuck/dps_http/api/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -18,27 +18,26 @@ type Claims struct {
 
 // JWTMiddleware validates the JWT in the Authorization header.
 func JWTMiddleware(jwtSecret []byte) gin.HandlerFunc {
-	log.Printf("JWTMiddleware: running ... ")
+	logs.Log("[middleware]:[jwt] JWTMiddleware()")
 	return func(c *gin.Context) {
 
 		tokenString, err := c.Cookie("jwt")
 		if err != nil {
-			log.Printf("JWTMiddleware: no token found in cookie")
-
+			logs.Log("[middleware]: no token found in cookie")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
-		log.Printf("JWTMiddleware: cookie token: ...%s", tokenString[len(tokenString)-20:])
+		logs.Log("[middleware]: cookie token: ...%s", tokenString[len(tokenString)-20:])
 		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-			log.Printf("JWTMiddleware: parsing token with claims: %v", token.Claims)
+			logs.Log("[middleware]: parsing token with claims: %v", token.Claims)
 			return jwtSecret, nil
 		})
 		if err != nil || !token.Valid {
-			log.Printf("JWTMiddleware: invalid token: (%v) %v", err, token)
+			logs.Log("[middleware]: invalid token: (%v) %v", err, token)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		log.Printf("JWTMiddleware: token is valid, claims: %v", token.Claims)
+		logs.Log("[middleware]: token is valid, claims: %v", token.Claims)
 		claims := token.Claims.(*Claims)
 		c.Set("user_id", claims.Subject)
 		c.Set("username", claims.RegisteredClaims.Subject)

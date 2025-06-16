@@ -3,12 +3,13 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
+	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type MongoBucket struct {
@@ -19,7 +20,7 @@ type MongoBucket struct {
 }
 
 func NewMongoBucket(db *mongo.Database, id string) *MongoBucket {
-	log.Printf("Creating MongoBucket with id=%q", id)
+	logs.Log("[storage:mongo:buckets] NewMongoBucket: %q", id)
 	collection := db.Collection(id)
 	return &MongoBucket{
 		id:         id,
@@ -32,14 +33,24 @@ func NewMongoBucket(db *mongo.Database, id string) *MongoBucket {
 func (b *MongoBucket) Name() string {
 	return b.id
 }
+func (b *MongoBucket) String() string {
+	return fmt.Sprintf("{ MongoBucket(id=%q, count=%d, size=%d) }", b.id, b.count, b.size)
+}
 
 func (b *MongoBucket) Store(key string, value any) error {
-	_, err := b.InsertOne(context.Background(), map[string]any{
-		"key":   key,
-		"value": value,
-	})
+	_, err := b.UpdateOne(
+		context.Background(),
+		map[string]any{
+			"key":   key,
+			"value": value,
+		},
+		bson.M{"$set": map[string]any{
+			"key":   key,
+			"value": value,
+		}}, options.Update().SetUpsert(true),
+	)
 	if err != nil {
-		log.Printf("Store error: %v", err)
+		logs.Err("[storage:mongo:buckets] Store() : %v", err)
 		return err
 	}
 	return nil
@@ -68,38 +79,39 @@ func (b *MongoBucket) Update(key string, value any) error {
 	return nil
 }
 func (b *MongoBucket) Patch(key string, updates map[string]any) error {
-	log.Printf("Patching key %q in bucket %q with updates: %v", key, b.Name(), updates)
+	logs.Log("[storage:mongo:buckets] Patch() key %q in bucket %q with updates: %v", key, b.Name(), updates)
 
 	// Build a $set document that prefixes each field with "value."
-	setDoc := bson.M{}
+	patch := bson.M{}
 	for field, val := range updates {
-		setDoc["value."+field] = val
+		patch["value."+field] = val
 	}
-	log.Printf("Patch: using setDoc: %v", setDoc)
-	// Run the update
+	logs.Log("[storage:mongo:buckets] patch doc: %v", patch)
+
 	result, err := b.UpdateOne(
 		context.Background(),
 		bson.M{"key": key},
-		bson.M{"$set": setDoc},
+		bson.M{"$set": patch},
 	)
 	if err != nil {
-		log.Printf("Patch error: %v", err)
+		logs.Err("[storage:mongo:buckets] Patch() : %v", err)
 		return err
 	}
 	if result.MatchedCount == 0 {
-		log.Printf("Patch: no document matched for key %q in bucket %q", key, b.Name())
+		logs.Err("[storage:mongo:buckets] no document matched for key %q in bucket %q", key, b.Name())
 		return fmt.Errorf("no document with key=%q in bucket=%q", key, b.Name())
 	}
-	log.Printf("Patch: updated %d document(s) for key %q in bucket %q", result.ModifiedCount, key, b.Name())
+	logs.Log("[storage:mongo:buckets] updated %d document(s) for key %q in bucket %q", result.ModifiedCount, key, b.Name())
 	return nil
 }
 
 func (b *MongoBucket) Lookup(filter any) (map[string]any, bool) {
 	mongoFilter := storage.CleanAndPrefix(filter)
-	log.Printf("Lookup: using mongoFilter: %v", mongoFilter)
+	logs.Log("[storage:mongo:buckets] Lookup() filter : %v", mongoFilter)
 
 	if len(mongoFilter) == 0 {
 		// nothing allowed to search on
+		logs.Err("[storage:mongo:buckets] empty filter provided, nothing to search on")
 		return nil, false
 	}
 
@@ -107,35 +119,39 @@ func (b *MongoBucket) Lookup(filter any) (map[string]any, bool) {
 	err := b.FindOne(context.Background(), mongoFilter).Decode(&rawDoc)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			log.Printf("Lookup: no document found for filter %v", mongoFilter)
+			logs.Err("[storage:mongo:buckets] no document found for filter %v", mongoFilter)
 			return nil, false
 		}
-		log.Printf("Lookup error: %v", err)
+		logs.Err("Lookup error: %v", err)
 		return nil, false
 	}
 
 	// unwrap and return
 	userMap, ok := rawDoc["value"].(map[string]any)
 	if !ok {
-		log.Printf("Lookup: unexpected document shape %T", rawDoc["value"])
+		logs.Err("[storage:mongo:buckets] unexpected document shape %T", rawDoc["value"])
 		return nil, false
 	}
-	log.Printf("Lookup: found user map: %v", userMap["username"])
+	logs.Log("[storage:mongo:buckets] found user map: %v", userMap["username"])
 	return userMap, true
 }
-func (b *MongoBucket) List(bucket string) ([]any, error) {
-	log.Println("List: all keys in bucket:", bucket)
+func (b *MongoBucket) List() ([]any, error) {
+	logs.Log("[storage:mongo:buckets] List() all keys in bucket %s:", b.Name())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	cursor, err := b.Find(context.Background(), map[string]any{})
+	cursor, err := b.Find(ctx, map[string]any{})
 	if err != nil {
+		logs.Err("[storage:mongo:buckets] error: %v", err)
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(ctx)
 
 	var results []any
-	for cursor.Next(context.Background()) {
+	for cursor.Next(ctx) {
 		var result map[string]any
 		if err := cursor.Decode(&result); err != nil {
+			logs.Err("[storage:mongo:buckets] decode error: %v", err)
 			return nil, err
 		}
 		results = append(results, result["value"])
@@ -144,12 +160,37 @@ func (b *MongoBucket) List(bucket string) ([]any, error) {
 	return results, nil
 }
 
+func (b *MongoBucket) ListItems() ([]map[string]any, error) {
+	logs.Log("[storage:mongo:buckets] ListItems() all items in bucket: %s", b.Name())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := b.Find(ctx, map[string]any{})
+	if err != nil {
+		logs.Err("[storage:mongo:buckets] error: %v", err)
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []map[string]any
+	for cursor.Next(ctx) {
+		var result map[string]any
+		if err := cursor.Decode(&result); err != nil {
+			logs.Err("[storage:mongo:buckets] decode error: %v", err)
+			return nil, err
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
 func (b *MongoBucket) Count() (int64, error) {
-	log.Printf("Counting documents in bucket: %s", b.Name())
+	logs.Log("Counting documents in bucket: %s", b.Name())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	count, err := b.CountDocuments(ctx, bson.M{})
-	log.Printf("Counted %d documents in bucket: %s", count, b.Name())
+	logs.Log("Counted %d documents in bucket: %s", count, b.Name())
 	return count, err
 }
