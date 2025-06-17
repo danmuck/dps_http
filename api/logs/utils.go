@@ -22,15 +22,20 @@ var logger *ServiceLogger = &ServiceLogger{
 }
 
 const (
-	StyleReset     = "\033[0m"
+	// Reset
+	StyleReset = "\033[0m"
+
+	// Text attributes
 	StyleBold      = "\033[1m"
 	StyleDim       = "\033[2m"
-	StyleItalic    = "\033[3m"
+	StyleItalic    = "\033[3m" // Not always supported
 	StyleUnderline = "\033[4m"
 	StyleBlink     = "\033[5m"
 	StyleReverse   = "\033[7m"
 	StyleHidden    = "\033[8m"
-	// colors
+	StyleStrike    = "\033[9m" // Strikethrough
+
+	// Foreground (normal colors)
 	StyleBlack   = "\033[30m"
 	StyleRed     = "\033[31m"
 	StyleGreen   = "\033[32m"
@@ -39,7 +44,36 @@ const (
 	StyleMagenta = "\033[35m"
 	StyleCyan    = "\033[36m"
 	StyleWhite   = "\033[37m"
-	StyleGray    = "\033[90m"
+
+	// Foreground (bright colors)
+	StyleBrightBlack   = "\033[90m" // often used as gray
+	StyleBrightRed     = "\033[91m"
+	StyleBrightGreen   = "\033[92m"
+	StyleBrightYellow  = "\033[93m"
+	StyleBrightBlue    = "\033[94m"
+	StyleBrightMagenta = "\033[95m"
+	StyleBrightCyan    = "\033[96m"
+	StyleBrightWhite   = "\033[97m"
+
+	// Background (normal colors)
+	BgBlack   = "\033[40m"
+	BgRed     = "\033[41m"
+	BgGreen   = "\033[42m"
+	BgYellow  = "\033[43m"
+	BgBlue    = "\033[44m"
+	BgMagenta = "\033[45m"
+	BgCyan    = "\033[46m"
+	BgWhite   = "\033[47m"
+
+	// Background (bright colors)
+	BgBrightBlack   = "\033[100m"
+	BgBrightRed     = "\033[101m"
+	BgBrightGreen   = "\033[102m"
+	BgBrightYellow  = "\033[103m"
+	BgBrightBlue    = "\033[104m"
+	BgBrightMagenta = "\033[105m"
+	BgBrightCyan    = "\033[106m"
+	BgBrightWhite   = "\033[107m"
 )
 
 // checks if the log message contains any of the specified filters

@@ -9,13 +9,26 @@ import (
 	"github.com/danmuck/dps_http/configs"
 )
 
+const (
+	INACTIVE = iota // Verbosity Min
+	ERROR           // Verbosity Production
+	WARN            // Verbosity Testing
+	DEBUG           // Verbosity Development
+)
+
+const MODE = DEBUG  // Set the logging mode, e.g., DEV, ERROR, WARN, DEBUG
+const TRACE = false // Enable/disable stack trace logging
+
 func ColorTest() {
+	Dev("This is a dev message")
+
+	Init("This is an init message")
 	Err("This is an error message")
+
 	Warn("This is a warning message")
 	Info("This is an info message")
+
 	Debug("This is a debug message")
-	Dev("This is a dev message")
-	Init("This is an init message")
 }
 
 func Log(format string, v ...any) {
@@ -32,26 +45,44 @@ func Log(format string, v ...any) {
 }
 
 func Err(format string, v ...any) {
+	if MODE < ERROR {
+		return
+	}
 	Print(StyleRed, "[error]", format, v...)
 }
 
 func Warn(format string, v ...any) {
+	if MODE < WARN {
+		return
+	}
 	Print(StyleYellow, "[warn]", format, v...)
 }
 
 func Info(format string, v ...any) {
+	if MODE < WARN {
+		return
+	}
 	Print(StyleBlue, "[info]", format, v...)
 }
 
 func Debug(format string, v ...any) {
+	if MODE < DEBUG {
+		return
+	}
 	Print(StyleGreen, "[debug]", format, v...)
 }
 
 func Dev(format string, v ...any) {
+	if MODE < DEBUG {
+		return
+	}
 	Print(StyleMagenta, "[dev_]", format, v...)
 }
 
 func Init(format string, v ...any) {
+	if MODE < DEBUG {
+		return
+	}
 	Print(StyleBlack, "[init]", format, v...)
 }
 
@@ -69,7 +100,10 @@ func Print(C, T, format string, v ...any) {
 func String(C, T, format string, v ...any) string {
 	msg := fmt.Sprintf(format, v...)
 	ts := time.Now().Format(time.Stamp)
-
+	if !TRACE {
+		// If TRACE is disabled we don't include the file and line number
+		return fmt.Sprintf(format, v...)
+	}
 	_, file, line, ok := runtime.Caller(3)
 	if ok {
 		path := TrimToProjectRoot("dps_http", file)            // max 32 chars
