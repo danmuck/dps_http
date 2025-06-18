@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+    dps_http:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        ports:
+            # expose server on host port 8080
+            - "0.0.0.0:8080:8080"
+        environment:
+            - MONGO_URI=mongodb://mongo:27017/dps
+            - GO_ENV=production
+            - PORT=8080
+        depends_on:
+            - mongo
+
+    mongo:
+        image: mongo:6.0-alpine
+        restart: always
+        ports:
+            # Expose MongoDB on host port 27017
+            - "0.0.0.0:27017:27017"
+        volumes:
+            # Persist your database files on the host
+            - mongo_data:/data/db
+        environment:
+            # optional: set a MongoDB root user/password
+            - MONGO_USER=admin
+            - MONGO_PASSWORD=secret
+
+volumes:
+    mongo_data:
+        driver: local

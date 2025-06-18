@@ -16,9 +16,7 @@ import (
 	"github.com/danmuck/dps_http/storage"
 )
 
-// registerPayload is the expected input for user registration.
-// It includes username, email, password, and a confirmation field for password matching.
-// It is used to validate incoming registration requests.
+// registerPayload defines the input for user registration.
 type registerPayload struct {
 	Username string `json:"username" binding:"required"`
 	Email    string `json:"email"    binding:"required,email"`
@@ -26,22 +24,14 @@ type registerPayload struct {
 	Confirm  string `json:"confirm"  binding:"required,eqfield=Password"` // confirm password must match
 }
 
-// loginPayload is the expected input for user login.
-// It includes username and password fields, both required for authentication.
-// It is used to validate incoming login requests.
+// loginPayload represents the input for user login.
 type loginPayload struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
-// RegisterHandler handles user registration.
-// It validates the input, checks for uniqueness of username and email,
-// hashes the password, assigns roles, and stores the user in the database.
-// It also signs a JWT token for the user and sets it as a secure cookie.
-// If successful, it returns a 201 Created response with the username.
-// If there are validation errors or uniqueness conflicts, it returns appropriate error responses.
-// It uses the provided storage interface to interact with the user data.
-// The JWT secret is used to sign the token, and it should be kept secure.
+// RegisterHandler registers a new user, ensuring unique username and email,
+// hashes the password, assigns roles, stores the user, and returns a JWT cookie.
 func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 	logs.Init("RegisterHandler() initializing with JWT secret: %s", jwtSecret)
 	logs.Init("using storage type: %s", store.Type())
@@ -112,7 +102,9 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		c.SetCookie("jwt", tokenString, 3600*24, "/", "localhost", true, true) // secure cookie
+		c.SetCookie("jwt", tokenString, 3600*24, "/", "localhost", false, true) // not secure for localhost
+		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", false, false)
+
 		c.JSON(http.StatusCreated, gin.H{
 			"status":   "ok",
 			"username": user.Username,
@@ -176,8 +168,8 @@ func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 		logs.Log("token signed successfully for user: %s \n  ...%v with hash: %s",
 			user.Username, signed[len(signed)-20:], jwtSecret)
 
-		c.SetCookie("jwt", signed, 3600*24, "/", "", true, true)
-		c.SetCookie("username", user.Username, 3600*24, "/", "", true, false)
+		c.SetCookie("jwt", signed, 3600*24, "/", "localhost", false, true)
+		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", false, false)
 		c.JSON(http.StatusOK, gin.H{
 			"username": user.Username,
 		})

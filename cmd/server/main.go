@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
-	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/api/services/metrics"
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/configs"
@@ -76,7 +75,7 @@ func (ws *WebServer) registerRoutes() {
 		ug.PUT("/:id", users.UpdateUser(ws.store))    // Update user by ID
 		ug.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
 		// TODO: dev route should be moved and locked away
-		ug.POST("/:id", users.CreateUser(ws.store))
+		ug.POST("/:id", middleware.RoleMiddleware("admin"), users.CreateUser(ws.store))
 	}
 	admin := ws.router.Group("/metrics")
 	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("admin"))
@@ -97,16 +96,19 @@ func init() {
 }
 
 func main() {
-	logs.ColorTest()
 	uri := os.Getenv("MONGO_URI")
 	jwt := os.Getenv("JWT_SECRET")
+	domain := os.Getenv("DOMAIN")
+	if domain == "" {
+		domain = "127.0.0.1"
+	}
 	log.Println("Environment: { uri: ", uri, ", jwt: ", jwt, " }")
 	if uri == "" || jwt == "" {
 		log.Fatal("MONGO_URI and JWT_SECRET must be set in environment variables or .env file")
 	}
 
 	cfg := &configs.Config{
-		Domain: "127.0.0.1",
+		Domain: domain,
 		Port:   ":8080",
 		DB: configs.Storage{
 			T:        "mongo",

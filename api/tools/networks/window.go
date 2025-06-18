@@ -37,12 +37,12 @@ func (l *TransmissionWindow) String() string {
 		Avg Packet Transmission Time: %.5fs, 		// time to transmit single packet to wire
 		Total Transmission Time: %.5fs,			// time to transmit all packets back to back
 
-		Queueing Delay: %.5fs,				// (ρ/(μ-λ)) average queueing delay in M/M/1 queueing model 
+		Queueing Delay: %.5fs,					// (ρ/(μ-λ)) average queueing delay in M/M/1 queueing model 
 		Processing Delay: %.5fs,				// (1/μ) processing delay in M/M/1 queueing model 
 		Link Prop Delay: %.5fs,				// pd = (D/S) one way physical link propagation delay in seconds
 		RTT: %.5fs,						// (2pd) round trip propagation time 
 
-		Average System Time MM1: %.5fs,			// (Wq + 1/μ) average system time in M/M/1 queueing model 
+		Average System Time MM1: %.5fs,				// (Wq + 1/μ) average system time in M/M/1 queueing model 
 		Persistent Service Time: %.5fs,			// persistent connections 
 		Non Persistent Service Time: %.5fs,			// non-persistent connections
 		Packets: %d,						// number of packets in the transmission window

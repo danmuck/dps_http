@@ -118,7 +118,7 @@ func ComputeMetrics(params *ServiceParams) *TransmissionWindow {
 	rtt := roundTripTime(params.Distance_m, NetworkPropagationSpeedActual)
 
 	// M/M/1 parameters
-	mu := serviceRate(params.DataRate_bps, params.PacketSize_b)
+	mu := params.ServiceRate_pps
 	lambda := params.ArrivalRate_pps
 	tw.ProcessingDelay = 1.0 / mu
 	tw.QueueingDelay = averageQueueingDelayMM1(lambda, mu)

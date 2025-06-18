@@ -7,18 +7,18 @@ import (
 
 // todo: tidy this up into an actual config struct
 type Config struct {
-	Domain string
-	Port   string
-	DB     Storage
-	Auth   Auth
+	Domain string  // domain to bind the server to
+	Port   string  // port to listen on
+	DB     Storage // database configuration
+	Auth   Auth    // authentication configuration
 }
 type Storage struct {
-	T        string // type for future expansion default: "mongo"
-	MongoURI string
+	T        string // type for future expansion, default: "mongo"
+	MongoURI string // mongo connection uri
 	Name     string // database name
 }
 type Auth struct {
-	JWTSecret string
+	JWTSecret string // jwt secret for authentication
 }
 
 var (

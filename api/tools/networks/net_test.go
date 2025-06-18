@@ -36,18 +36,18 @@ import (
 // in bits per second, and N is the number of packets
 
 const (
-	DefaultLinkDistance = 1500 * km      // Distance in meters
-	DefaultDataRate     = 200 * Mb / sec // Data rate in bits per second
-	DefaultPacketSize   = 4 * MB         // Size of each chunk in bits
-	DefaultPackets      = 5              // Number of chunks to simulate
-	DefaultArrivalRate  = 40.0           // Packets per second (λ)
-	DefaultServiceRate  = 50.0           // Service rate in packets per second (μ)
-	DefaultLabel        = "dummy.file"   // Example file name
+	DefaultLinkDistance = 1500 * km      // distance in meters
+	DefaultDataRate     = 200 * Mb / sec // data rate in bits per second
+	DefaultPacketSize   = 4 * MB         // size of each chunk in bits
+	DefaultPackets      = 5              // number of chunks to simulate
+	DefaultArrivalRate  = 40.0           // packets per second (λ)
+	DefaultServiceRate  = 50.0           // service rate in packets per second (μ)
+	DefaultLabel        = "dummy.label"  // example packet label/identifier note:
 )
 
 func TestSweepingMu(t *testing.T) {
 	logs.ColorTest()
-	logs.Dev("Testing sweeping mu values for network service parameters...")
+	logs.Dev("\t========[TestSweepingMu]========")
 
 	// Create a service with default parameters
 	service := NewServiceParams(DefaultLinkDistance, DefaultDataRate, DefaultPacketSize, DefaultPackets, DefaultLabel)
@@ -89,7 +89,7 @@ func TestSweepingMu(t *testing.T) {
 
 func TestSweepingLambdaExt(t *testing.T) {
 	logs.ColorTest()
-	logs.Dev("(ext) Testing sweeping lambda values for network service parameters...")
+	logs.Dev("\t========[TestSweepingLambdaExt]========")
 
 	μ := serviceRate(DefaultDataRate, DefaultPacketSize)
 	for λ := 0.0; λ <= μ*1.2; λ += μ / 20 {
@@ -155,7 +155,8 @@ func TestSweepingLambda(t *testing.T) {
 	}
 }
 func TestNetworkingConcepts(t *testing.T) {
-	logs.Dev("Testing network metrics computation...")
+	logs.ColorTest()
+	logs.Dev("========[TestNetworkingConcepts]========")
 
 	server_1r := NewServiceParams(DefaultLinkDistance, DefaultDataRate, DefaultPacketSize, DefaultPackets, "[ 1 ]")
 	response_1r := ComputeMetrics(server_1r)
