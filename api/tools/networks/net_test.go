@@ -2,9 +2,11 @@ package networks
 
 import (
 	"fmt"
+
 	"testing"
 
 	"github.com/danmuck/dps_http/api/logs"
+	"github.com/shirou/gopsutil/net"
 )
 
 // Key:
@@ -45,6 +47,34 @@ const (
 	DefaultLabel        = "dummy.label"  // example packet label/identifier note:
 )
 
+func TestNet(t *testing.T) {
+	tests := NewFrame("default", 1, 1)
+	logs.Dev(tests.String())
+}
+func TestNetStuff(t *testing.T) {
+	logs.ColorTest()
+	logs.Dev("\t========[TestNetStuff]========")
+
+	// Create a service with default parameters
+	service := NewServiceParams(
+		DefaultLinkDistance, DefaultDataRate, DefaultPacketSize, DefaultPackets, DefaultLabel,
+	)
+	logs.Dev("Service Params: %v", service)
+
+	// Compute metrics for the service
+	response := ComputeMetrics(service)
+	// logs.Dev("Response: %s", response.String())
+	io, _ := net.IOCounters(false)
+	logs.Dev("Network IO Counters: %v", io)
+	f := GenerateFrame(10, 10)
+	logs.Dev("Generated Frame: %+v", f)
+	if response.PacketsServiced == 0 {
+		t.Error("No packets serviced in the response")
+	} else {
+		t.Log("Network propagation speed test passed.")
+	}
+}
+
 func TestSweepingMu(t *testing.T) {
 	logs.ColorTest()
 	logs.Dev("\t========[TestSweepingMu]========")
@@ -69,7 +99,7 @@ func TestSweepingMu(t *testing.T) {
 			lambda, mu, lambda/mu, w.QueueingDelay, w.ProcessingDelay+w.QueueingDelay)
 	}
 
-	logs.Warn(`		
+	logs.Warn(`
 	// 	λ 			Arrival rate in packets/sec (how fast requests come in)
 	// 	μ 			Service rate in packets/sec (how fast you could process if nobody waited)
 	// 	ρ = λ/μ 		Traffic intensity or utilization ratio—fraction of your capacity that’s in use
@@ -105,7 +135,7 @@ func TestSweepingLambdaExt(t *testing.T) {
 		fmt.Printf("λ=%.1fp/s (/)  μ: %.2fp/s (=) ρ=%.2f, Wq=%.3fs, W=%.3fs \n",
 			λ, μ, λ/μ, w.QueueingDelay, w.ProcessingDelay+w.QueueingDelay)
 	}
-	logs.Warn(`		
+	logs.Warn(`
 	// 	λ 			Arrival rate in packets/sec (how fast requests come in)
 	// 	μ 			Service rate in packets/sec (how fast you could process if nobody waited)
 	// 	ρ = λ/μ 		Traffic intensity or utilization ratio—fraction of your capacity that’s in use
@@ -139,7 +169,7 @@ func TestSweepingLambda(t *testing.T) {
 		fmt.Printf("λ=%.1fp/s (/)  μ: %.2fp/s (=) ρ=%.2f, Wq=%.3fs, W=%.3fs \n",
 			lambda, mu, lambda/mu, w.QueueingDelay, w.ProcessingDelay+w.QueueingDelay)
 	}
-	logs.Warn(`		
+	logs.Warn(`
 	// 	λ 			Arrival rate in packets/sec (how fast requests come in)
 	// 	μ 			Service rate in packets/sec (how fast you could process if nobody waited)
 	// 	ρ = λ/μ 		Traffic intensity or utilization ratio—fraction of your capacity that’s in use

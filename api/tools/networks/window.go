@@ -3,12 +3,14 @@ package networks
 import (
 	"fmt"
 
+	"slices"
+
 	"github.com/danmuck/dps_http/api/logs"
 )
 
-func (l *TransmissionWindow) AddPacket(pkt *Packet) {
+func (l *TransmissionWindow) AddPacket(pkt *Frame) {
 	l.Packets = append(l.Packets, pkt)
-	l.BitsProcessed += pkt.PayloadSize_b
+	l.BitsProcessed += pkt.Samples
 	l.PacketsServiced++
 	// logs.Debug("Added packet: %s, total size: %s, total count: %d",
 	// 	pkt.Source, FormatBits(l.BitsProcessed, 2, 2), l.PacketsServiced)
@@ -17,9 +19,9 @@ func (l *TransmissionWindow) AddPacket(pkt *Packet) {
 func (l *TransmissionWindow) RemovePacket(label string) {
 	for i, pkt := range l.Packets {
 		if pkt.Source == label {
-			l.BitsProcessed -= pkt.PayloadSize_b
+			l.BitsProcessed -= pkt.Samples
 			l.PacketsServiced--
-			l.Packets = append(l.Packets[:i], l.Packets[i+1:]...)
+			l.Packets = slices.Delete(l.Packets, i, i+1)
 			logs.Debug("Removed packet: %s, total size: %.2f bits, total count: %d", label, l.BitsProcessed, l.PacketsServiced)
 			return
 		}
@@ -31,19 +33,19 @@ func (l *TransmissionWindow) String() string {
 	return fmt.Sprintf(`
 	TransmissionWindow {
 		Packets Serviced (p): %d,				// total number of packets serviced
-		Bits Processed: %s,					// total size of packets 
-		Avg Packet Size: %s,					// average size of packets 
+		Bits Processed: %s,					// total size of packets
+		Avg Packet Size: %s,					// average size of packets
 
 		Avg Packet Transmission Time: %.5fs, 		// time to transmit single packet to wire
 		Total Transmission Time: %.5fs,			// time to transmit all packets back to back
 
-		Queueing Delay: %.5fs,					// (ρ/(μ-λ)) average queueing delay in M/M/1 queueing model 
-		Processing Delay: %.5fs,				// (1/μ) processing delay in M/M/1 queueing model 
+		Queueing Delay: %.5fs,					// (ρ/(μ-λ)) average queueing delay in M/M/1 queueing model
+		Processing Delay: %.5fs,				// (1/μ) processing delay in M/M/1 queueing model
 		Link Prop Delay: %.5fs,				// pd = (D/S) one way physical link propagation delay in seconds
-		RTT: %.5fs,						// (2pd) round trip propagation time 
+		RTT: %.5fs,						// (2pd) round trip propagation time
 
-		Average System Time MM1: %.5fs,				// (Wq + 1/μ) average system time in M/M/1 queueing model 
-		Persistent Service Time: %.5fs,			// persistent connections 
+		Average System Time MM1: %.5fs,				// (Wq + 1/μ) average system time in M/M/1 queueing model
+		Persistent Service Time: %.5fs,			// persistent connections
 		Non Persistent Service Time: %.5fs,			// non-persistent connections
 		Packets: %d,						// number of packets in the transmission window
 	}`, l.PacketsServiced, FormatB(l.BitsProcessed), FormatB(l.AvgPacketSize),

@@ -76,26 +76,26 @@ func ComputeUtilization(metrics ...*TransmissionWindow) (util, utilNP float64) {
 	logs.Info("[ Running network utilization query ]")
 	prop_total := 0.0
 	nprop_total := 0.0
-	query_trans_total := 0.0
+	window_trans_total := 0.0
 	for _, q := range metrics {
 		if q.PacketsServiced == 0 {
 			logs.Warn("No files in query response, cannot calculate utilization.")
 		}
 		prop_total += q.PersistentServiceTime
 		nprop_total += q.NonPersistentServiceTime
-		query_trans_total += q.TotalTransmissionTime
+		window_trans_total += q.TotalTransmissionTime
 	}
-	utilization := query_trans_total / prop_total
-	nutilization := query_trans_total / nprop_total
+	utilization := window_trans_total / prop_total
+	nutilization := window_trans_total / nprop_total
 	logs.Debug(`
 Utilization --
 	Total Query Transmission Time:           %.5f s
-	Total Propagation Time (persistent):     %.5f s 
-	Total Propagation Time (non-persistent): %.5f s 
-	Utilization (persistent):     %.2f%% 
+	Total Propagation Time (persistent):     %.5f s
+	Total Propagation Time (non-persistent): %.5f s
+	Utilization (persistent):     %.2f%%
 	Utilization (non-persistent): %.2f%%
 	`,
-		query_trans_total,
+		window_trans_total,
 		prop_total, nprop_total,
 		utilization*100, nutilization*100,
 	)
@@ -105,11 +105,11 @@ Utilization --
 
 func ComputeMetrics(params *ServiceParams) *TransmissionWindow {
 	tw := &TransmissionWindow{
-		Packets: make([]*Packet, 0, params.PacketLoad),
+		Packets: make([]*Frame, 0, params.PacketLoad),
 	}
-	pkt := &Packet{Source: params.Label, PayloadSize_b: params.PacketSize_b}
+	fr := &Frame{Source: params.Iface, Samples: params.PacketSize_b}
 	for range params.PacketLoad {
-		tw.AddPacket(pkt)
+		tw.AddPacket(fr)
 	}
 
 	// core delays
