@@ -69,24 +69,26 @@ func (ws *WebServer) registerRoutes() {
 		rg.POST("/register", auth.RegisterHandler(ws.store, ws.cfg.Auth.JWTSecret))
 	}
 	ug := ws.router.Group("/users")
-	ug.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
+	ug.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("user")) // Apply JWT and role middleware to all routes in this group
 	{
-		ug.GET("/", middleware.RoleMiddleware("admin"), users.ListUsers(ws.store))
+		// @NOTE -- locked to admin for development purposes
+		ug.GET("/", middleware.AuthorizeByRoles("admin"), users.ListUsers(ws.store))
+		ug.GET("/:username", users.GetUser(ws.store))
 		uog := ug.Group("/")
-		uog.Use(middleware.AuthorizeOwnResource())
+		uog.Use(middleware.AuthorizeResourceAccess())
 		{
-			uog.GET("/:username", users.GetUser(ws.store))
-			uog.PUT("/:id", users.UpdateUser(ws.store))    // Update user by ID
-			uog.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
+			uog.GET("/r/:username", users.GetUser(ws.store)) // Get user by ID
+			uog.PUT("/:id", users.UpdateUser(ws.store))      // Update user by ID
+			uog.DELETE("/:id", users.DeleteUser(ws.store))   // Delete user by ID
 		}
 		// TODO: dev route should be moved and locked away
-		ug.POST("/:id", middleware.RoleMiddleware("admin"), users.CreateUser(ws.store))
+		ug.POST("/:id", middleware.AuthorizeByRoles("admin"), users.CreateUser(ws.store))
 	}
 	admin := ws.router.Group("/metrics")
-	admin.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("admin"))
+	admin.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("admin"))
 
 	dev := ws.router.Group("/dev")
-	dev.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("dev"))
+	dev.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("dev"))
 
 	// note: register all services
 	ws.registerServices()

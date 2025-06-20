@@ -3,6 +3,8 @@ package middleware
 import (
 	"net/http"
 
+	"slices"
+
 	"github.com/danmuck/dps_http/api/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
@@ -45,18 +47,20 @@ func JWTMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		logs.Log("token is valid, claims: [[[%v]]]", token.Claims)
+		logs.Log("token is valid, claims: [%v]", token.Claims)
 		claims := token.Claims.(*Claims)
-		logs.Dev("SUBJECT: %s", claims.Subject)
+		logs.Dev("SUBJECT: %s USER: %s", claims.Subject, claims.Username)
+
+		c.Set("username", claims.Username)
 		c.Set("user_id", claims.Subject)
-		c.Set("username", claims.RegisteredClaims.Subject)
 		c.Set("roles", claims.Roles)
 		c.Next()
 	}
 }
 
-func AuthorizeOwnResource() gin.HandlerFunc {
+func AuthorizeResourceAccess() gin.HandlerFunc {
 	return func(c *gin.Context) {
+
 		// parse & verify the JWT from the cookie/header
 		tokenStr, err := c.Cookie("jwt")
 		if err != nil {
@@ -76,41 +80,59 @@ func AuthorizeOwnResource() gin.HandlerFunc {
 		// extract username from claims to match url param
 		claims := token.Claims.(*Claims)
 		username := claims.Username
-
-		// get the “resource owner” ID from the URL (e.g. /users/:id)
 		owner := c.Param("username")
+		owner_id := c.Param("id")
 
-		// compare — if the token’s user ≠ resource owner, reject
-		logs.Dev("user: %s owner: %s ", username, owner)
-		if username != owner {
-			c.AbortWithStatusJSON(403, gin.H{"error": "not owner, not authorized"})
+		raw, _ := c.Get("roles")
+		have, ok := raw.([]string)
+		if !ok {
+			logs.Dev("AuthorizeResourceAccess: user is admin")
+			// c.AbortWithError(401, errors.New("invalid roles on ctx, try logging in and out"))
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "roles invalid, try logging in and out"})
 			return
 		}
-
+		logs.Dev("Authorize: user: %s owner: %s owner_id: %s", username, owner, owner_id)
+		// @NOTE -- not sure how secure this is, need to clean it up, i think there is a lot of unnecessary
+		// variables flying around in its current state
+		if (claims.Username != owner && claims.Subject != owner_id) && !CheckForRole("admin", have...) {
+			logs.Dev("cuser: %s owner: %s csub: %s owner_id%s", claims.Username, owner, claims.Subject, owner_id)
+			c.AbortWithStatusJSON(403, gin.H{"auth": "not owner, not authorized"})
+			return
+		}
+		logs.Dev("Authorized: user: %s owner: %s owner_id: %s", username, owner, owner_id)
 		// otherwise store it in context
-		c.Set("user_id", username)
-		c.Set("username", c.Param("username"))
+		c.Set("username", owner)
+		c.Set("user_id", claims.Subject)
 		c.Set("roles", claims.Roles)
 		c.Next()
 	}
 }
 
-// RoleMiddleware ensures the user has at least one required role.
-func RoleMiddleware(required ...string) gin.HandlerFunc {
+func CheckForRole(want string, have ...string) bool {
+	if have == nil {
+		logs.Err("CheckRole role is empty")
+		return false
+	}
+	if slices.Contains(have, want) {
+		return true
+	}
+	return false
+}
+
+// AuthorizeByRoles ensures the user has **at least** one required role.
+func AuthorizeByRoles(required ...string) gin.HandlerFunc {
 	logs.Init("RoleMiddleware required: %v", required)
 	return func(c *gin.Context) {
 		raw, _ := c.Get("roles")
-		roles, ok := raw.([]string)
+		have, ok := raw.([]string)
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid roles"})
 			return
 		}
 		for _, want := range required {
-			for _, have := range roles {
-				if have == want {
-					c.Next()
-					return
-				}
+			if CheckForRole(want, have...) {
+				c.Next()
+				return
 			}
 		}
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "insufficient permissions"})
