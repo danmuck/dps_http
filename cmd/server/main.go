@@ -3,10 +3,10 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
+	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/api/services/metrics"
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/configs"
@@ -61,6 +61,7 @@ func (ws *WebServer) registerServices() {
 }
 
 func (ws *WebServer) registerRoutes() {
+	middleware.InitAuthMiddleware(ws.cfg.Auth.JWTSecret)
 	rg := ws.router.Group("/auth")
 	{
 		rg.POST("/login", auth.LoginHandler(ws.store, ws.cfg.Auth.JWTSecret))
@@ -68,20 +69,24 @@ func (ws *WebServer) registerRoutes() {
 		rg.POST("/register", auth.RegisterHandler(ws.store, ws.cfg.Auth.JWTSecret))
 	}
 	ug := ws.router.Group("/users")
-	ug.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
+	ug.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("user")) // Apply JWT and role middleware to all routes in this group
 	{
-		ug.GET("/", users.ListUsers(ws.store))
-		ug.GET("/:username", users.GetUser(ws.store))
-		ug.PUT("/:id", users.UpdateUser(ws.store))    // Update user by ID
-		ug.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
+		ug.GET("/", middleware.RoleMiddleware("admin"), users.ListUsers(ws.store))
+		uog := ug.Group("/")
+		uog.Use(middleware.AuthorizeOwnResource())
+		{
+			uog.GET("/:username", users.GetUser(ws.store))
+			uog.PUT("/:id", users.UpdateUser(ws.store))    // Update user by ID
+			uog.DELETE("/:id", users.DeleteUser(ws.store)) // Delete user by ID
+		}
 		// TODO: dev route should be moved and locked away
 		ug.POST("/:id", middleware.RoleMiddleware("admin"), users.CreateUser(ws.store))
 	}
 	admin := ws.router.Group("/metrics")
-	admin.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("admin"))
+	admin.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("admin"))
 
 	dev := ws.router.Group("/dev")
-	dev.Use(middleware.JWTMiddleware([]byte(ws.cfg.Auth.JWTSecret)), middleware.RoleMiddleware("dev"))
+	dev.Use(middleware.JWTMiddleware(), middleware.RoleMiddleware("dev"))
 
 	// note: register all services
 	ws.registerServices()
@@ -96,28 +101,10 @@ func init() {
 }
 
 func main() {
-	uri := os.Getenv("MONGO_URI")
-	jwt := os.Getenv("JWT_SECRET")
-	domain := os.Getenv("DOMAIN")
-	if domain == "" {
-		domain = "127.0.0.1"
-	}
-	log.Println("Environment: { uri: ", uri, ", jwt: ", jwt, " }")
-	if uri == "" || jwt == "" {
-		log.Fatal("MONGO_URI and JWT_SECRET must be set in environment variables or .env file")
-	}
 
-	cfg := &configs.Config{
-		Domain: domain,
-		Port:   ":8080",
-		DB: configs.Storage{
-			T:        "mongo",
-			Name:     "dps_http",
-			MongoURI: os.Getenv("MONGO_URI"),
-		},
-		Auth: configs.Auth{
-			JWTSecret: os.Getenv("JWT_SECRET"),
-		},
+	cfg, err := configs.LoadConfig()
+	if err != nil {
+		logs.Fatal(err.Error())
 	}
 
 	server := NewWebServer(cfg)
@@ -131,5 +118,5 @@ func main() {
 	}
 
 	server.registerRoutes()
-	r.Run(cfg.Port)
+	r.Run(":" + cfg.Port)
 }

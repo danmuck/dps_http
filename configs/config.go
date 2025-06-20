@@ -1,6 +1,8 @@
 package configs
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"time"
 )
@@ -33,16 +35,49 @@ var (
 	}
 )
 
-var CONFIG = Config{
-	Domain: "127.0.0.1",
-	Port:   ":8080",
-	DB: Storage{
-		// needs to be updated alongside the storage/ api
-		T:        "mongo",
-		Name:     "dps_http",
-		MongoURI: os.Getenv("MONGO_URI"),
-	},
-	Auth: Auth{
-		JWTSecret: os.Getenv("JWT_SECRET"),
-	},
+func LoadConfig() (*Config, error) {
+	cfg := &Config{
+		Domain: os.Getenv("DOMAIN"),
+		Port:   os.Getenv("PORT"),
+		DB: Storage{
+			// needs to be updated alongside the storage/ api
+			T:        "mongo",
+			Name:     "dps_http",
+			MongoURI: os.Getenv("MONGO_URI"),
+		},
+		Auth: Auth{
+			JWTSecret: os.Getenv("JWT_SECRET"),
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		panic(err)
+	}
+	err := cfg.Validate()
+
+	return cfg, err
+}
+func (cfg *Config) String() string {
+	return fmt.Sprintf("Domain: %s, Port: %s, DB: %s, Auth: %s", cfg.Domain, cfg.Port, cfg.DB, cfg.Auth)
+}
+func (cfg *Config) Validate() error {
+	// @TODO -- needs to issue a help like command
+	if cfg.Domain == "" {
+		return errors.New("domain is required")
+	}
+	if cfg.Port == "" {
+		return errors.New("port is required")
+	}
+	if cfg.DB.T == "" {
+		return errors.New("database type is required")
+	}
+	if cfg.DB.MongoURI == "" {
+		return errors.New("mongo uri is required")
+	}
+	if cfg.DB.Name == "" {
+		return errors.New("database name is required")
+	}
+	if cfg.Auth.JWTSecret == "" {
+		return errors.New("jwt secret is required")
+	}
+	return nil
 }

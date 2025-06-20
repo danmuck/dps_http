@@ -8,21 +8,21 @@ import (
 	"github.com/danmuck/dps_http/api/logs"
 )
 
-func (l *TransmissionWindow) AddPacket(pkt *Frame) {
+func (l *TransmissionWindow) AddFrame(pkt *Frame) {
 	l.Packets = append(l.Packets, pkt)
-	l.BitsProcessed += pkt.Samples
-	l.PacketsServiced++
+	l.BitsProcessed += pkt.Sent_b + pkt.Recv_b
+	l.FramesServiced++
 	// logs.Debug("Added packet: %s, total size: %s, total count: %d",
 	// 	pkt.Source, FormatBits(l.BitsProcessed, 2, 2), l.PacketsServiced)
 }
 
-func (l *TransmissionWindow) RemovePacket(label string) {
+func (l *TransmissionWindow) RemoveFrame(label string) {
 	for i, pkt := range l.Packets {
 		if pkt.Source == label {
-			l.BitsProcessed -= pkt.Samples
-			l.PacketsServiced--
+			l.BitsProcessed -= (pkt.Sent_b + pkt.Recv_b)
+			l.FramesServiced--
 			l.Packets = slices.Delete(l.Packets, i, i+1)
-			logs.Debug("Removed packet: %s, total size: %.2f bits, total count: %d", label, l.BitsProcessed, l.PacketsServiced)
+			logs.Debug("Removed packet: %s, total size: %.2f bits, total count: %d", label, l.BitsProcessed, l.FramesServiced)
 			return
 		}
 	}
@@ -48,7 +48,7 @@ func (l *TransmissionWindow) String() string {
 		Persistent Service Time: %.5fs,			// persistent connections
 		Non Persistent Service Time: %.5fs,			// non-persistent connections
 		Packets: %d,						// number of packets in the transmission window
-	}`, l.PacketsServiced, FormatB(l.BitsProcessed), FormatB(l.AvgPacketSize),
+	}`, l.FramesServiced, FormatB(l.BitsProcessed), FormatB(l.AvgPacketSize),
 		l.AvgPacketTransmissionTime, l.TotalTransmissionTime,
 
 		l.QueueingDelay, l.ProcessingDelay,

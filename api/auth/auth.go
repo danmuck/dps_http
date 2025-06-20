@@ -11,8 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/danmuck/dps_http/api/logs"
-	"github.com/danmuck/dps_http/api/users"
-	"github.com/danmuck/dps_http/api/utils"
+	"github.com/danmuck/dps_http/api/types"
 	"github.com/danmuck/dps_http/storage"
 )
 
@@ -28,6 +27,10 @@ type registerPayload struct {
 type loginPayload struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+func storeUserToken(store storage.Client, user *types.User) {
+
 }
 
 // RegisterHandler registers a new user, ensuring unique username and email,
@@ -60,7 +63,7 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		hash, err := utils.HashPassword(in.Password)
+		hash, err := HashPassword(in.Password)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 			return
@@ -71,7 +74,7 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 			logs.Log("assigning admin role to user: %s", in.Username)
 			roles = append(roles, "admin")
 		}
-		user := users.User{
+		user := types.User{
 			ID:           primitive.NewObjectID(),
 			Username:     in.Username,
 			Email:        in.Email,
@@ -85,9 +88,10 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 		logs.Log("creating user: %s", user.Username)
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"sub":   user.ID.Hex(),
-			"roles": user.Roles,
-			"exp":   time.Now().Add(24 * time.Hour).Unix(),
+			"username": user.Username,
+			"sub":      user.ID.Hex(),
+			"roles":    user.Roles,
+			"exp":      time.Now().Add(24 * time.Hour).Unix(),
 		})
 		logs.Log("signing token for user: %s", user.Username)
 		tokenString, err := token.SignedString([]byte(jwtSecret))
@@ -104,6 +108,7 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 
 		c.SetCookie("jwt", tokenString, 3600*24, "/", "localhost", false, true) // not secure for localhost
 		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", false, false)
+		// c.SetCookie("sub", user.ID.Hex(), 3600*24, "/", "localhost", false, false)
 
 		c.JSON(http.StatusCreated, gin.H{
 			"status":   "ok",
@@ -117,8 +122,7 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 // checks the password against the stored hash, and signs a JWT token.
 func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 	logs.Init("LoginHandler() initializing with JWT secret: %s", jwtSecret)
-	logs.Init("using storage type: %s", store.Type())
-	logs.Init("using storage name: %s", store.Name())
+
 	return func(c *gin.Context) {
 		var in loginPayload
 		if err := c.ShouldBindJSON(&in); err != nil {
@@ -136,7 +140,7 @@ func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 			return
 		}
 		logs.Log("user found: %s", in.Username)
-		var user users.User
+		var user types.User
 		data, _ := bson.Marshal(raw)
 		if err := bson.Unmarshal(data, &user); err != nil {
 			logs.Log("unmarshal error: %v", err)
@@ -168,8 +172,10 @@ func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 		logs.Log("token signed successfully for user: %s \n  ...%v with hash: %s",
 			user.Username, signed[len(signed)-20:], jwtSecret)
 
-		c.SetCookie("jwt", signed, 3600*24, "/", "localhost", false, true)
-		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", false, false)
+		c.SetCookie("jwt", signed, 3600*24, "/", "localhost", true, true)
+		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", true, false)
+		// c.SetCookie("sub", user.ID.Hex(), 3600*24, "/", "localhost", false, false)
+
 		c.JSON(http.StatusOK, gin.H{
 			"username": user.Username,
 		})

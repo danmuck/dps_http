@@ -4,14 +4,6 @@ import (
 	"context"
 )
 
-//	var forbidden []string = []string{
-//		"password_hash", "token", "created_at", "updated_at",
-//		"bio", "avatar_url", "email",
-//	}
-var allowed []string = []string{
-	"username", "roles",
-}
-
 type Bucket interface {
 	Name() string                                   // returns the bucket name
 	Store(key string, value any) error              // stores a value by key

@@ -68,7 +68,7 @@ func TestNetStuff(t *testing.T) {
 	logs.Dev("Network IO Counters: %v", io)
 	f := GenerateFrame(10, 10)
 	logs.Dev("Generated Frame: %+v", f)
-	if response.PacketsServiced == 0 {
+	if response.FramesServiced == 0 {
 		t.Error("No packets serviced in the response")
 	} else {
 		t.Log("Network propagation speed test passed.")
@@ -110,7 +110,7 @@ func TestSweepingMu(t *testing.T) {
 	response := ComputeMetrics(service)
 	logs.Dev("Response: %s", response.String())
 
-	if response.PacketsServiced == 0 {
+	if response.FramesServiced == 0 {
 		t.Error("No packets serviced in the response")
 	} else {
 		t.Log("Network propagation speed test passed.")

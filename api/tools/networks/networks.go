@@ -80,13 +80,13 @@ type Frame struct {
 
 	Sent_b   float64 `json:"bits_sent"` // bytes sent
 	Recv_b   float64 `json:"bits_recv"` // bytes received
-	Sent_pkt float64 `json:"pkts_sent"` // packets sent N
-	Recv_pkt float64 `json:"pkts_recv"` // packets received N
+	Sent_pkt uint64  `json:"pkts_sent"` // packets sent (N)
+	Recv_pkt uint64  `json:"pkts_recv"` // packets received (N)
 
-	Upload_bps   float64 `json:"upload_bps"`   // upload rate in bits per second R
-	Download_bps float64 `json:"download_bps"` // download rate in bits per second R
-	PktsUp_pps   float64 `json:"pkts_up"`      // packet rate in packets per second mu
-	PktsDown_pps float64 `json:"pkts_down"`    // packets received per second lamda
+	Upload_bps   float64 `json:"upload_bps"`   // upload rate in bits per second (R)
+	Download_bps float64 `json:"download_bps"` // download rate in bits per second (R)
+	PktsUp_pps   float64 `json:"pkts_up"`      // packet rate in packets per second (mu)
+	PktsDown_pps float64 `json:"pkts_down"`    // packets received per second (lamda)
 	AvgPktSize   float64 `json:"avg_pkt_size"` // average packet size in bits
 }
 
@@ -100,8 +100,8 @@ func (fr *Frame) String() string {
 
 		Sent_b: %f,
 		Recv_b: %f,
-		Sent_pkt: %f,
-		Recv_pkt: %f,
+		Sent_pkt: %d,
+		Recv_pkt: %d,
 
 		Upload_bps: %f,
 		Download_bps: %f,
@@ -142,6 +142,22 @@ func FilterIOCounters(pernic bool, ifaces ...string) []net.IOCountersStat {
 	return stats
 }
 
+func (fr *Frame) PopulateFrame(src string, samples, duration_s float64) {
+	// initialize with single sample
+	sc := FilterIOCounters(false)
+	start := sc[0]
+
+	time.Sleep(time.Second * time.Duration(duration_s))
+
+	ec := FilterIOCounters(false)
+	end := ec[0]
+
+	fr.ComputeDeltas(start, end)
+	fr.ComputeRates()
+	fr.ComputeAvgPktSize()
+
+}
+
 // new frame for overall traffic on all interfaces
 func NewFrame(src string, samples, duration_s float64) *Frame {
 	fr := &Frame{
@@ -150,31 +166,31 @@ func NewFrame(src string, samples, duration_s float64) *Frame {
 		Timestamp:  time.Now(),
 		Duration_s: duration_s,
 	}
+	// initialize with single sample
 	sc := FilterIOCounters(false)
 	start := sc[0]
 
-	ticker := time.NewTicker(time.Second * time.Duration(duration_s))
-	defer ticker.Stop()
-	for _ = range ticker.C {
-		nc := FilterIOCounters(false)
-		next := nc[0]
+	time.Sleep(time.Second * time.Duration(duration_s))
 
-		fr.ComputeDeltas(start, next)
-		fr.ComputeRates()
-		fr.ComputeAvgPktSize()
-		start = next
-	}
-	// average them out
+	ec := FilterIOCounters(false)
+	end := ec[0]
+
+	fr.ComputeDeltas(start, end)
+	fr.ComputeRates()
+	fr.ComputeAvgPktSize()
 
 	return fr
+}
+func NewSample() *Frame {
+	return nil
 }
 
 func (fr *Frame) ComputeDeltas(start, next net.IOCountersStat) {
 	fr.Sent_b = float64(next.BytesSent-start.BytesSent) * 8 // convert to bits
 	fr.Recv_b = float64(next.BytesRecv-start.BytesRecv) * 8
-	fr.Sent_pkt = float64(next.PacketsSent - start.PacketsSent)
-	fr.Recv_pkt = float64(next.PacketsRecv - start.PacketsRecv)
-	logs.Debug("%s, Bytes Sent: %s, Bytes Received: %s, Packets Sent: %.0f, Packets Received: %.0f",
+	fr.Sent_pkt = next.PacketsSent - start.PacketsSent
+	fr.Recv_pkt = next.PacketsRecv - start.PacketsRecv
+	logs.Debug("%s, Bytes Sent: %s, Bytes Received: %s, Packets Sent: %d, Packets Received: %d",
 		fr.Timestamp.Format("15:04:05"),
 		FormatB(fr.Sent_b), FormatB(fr.Recv_b), fr.Sent_pkt, fr.Recv_pkt,
 	)
@@ -183,15 +199,15 @@ func (fr *Frame) ComputeDeltas(start, next net.IOCountersStat) {
 func (fr *Frame) ComputeRates() {
 	fr.Upload_bps = fr.Sent_b / fr.Duration_s
 	fr.Download_bps = fr.Recv_b / fr.Duration_s
-	fr.PktsUp_pps = fr.Sent_pkt / fr.Duration_s
-	fr.PktsDown_pps = fr.Recv_pkt / fr.Duration_s
+	fr.PktsUp_pps = float64(fr.Sent_pkt) / fr.Duration_s
+	fr.PktsDown_pps = float64(fr.Recv_pkt) / fr.Duration_s
 	logs.Debug("Upload: %s, Download: %s, Packets: %.2f p/s",
 		FormatBibi(fr.Upload_bps), FormatBibi(fr.Download_bps), fr.PktsUp_pps)
 	return
 }
 
 func (fr *Frame) ComputeAvgPktSize() {
-	fr.AvgPktSize = (fr.Sent_b + fr.Recv_b) / (fr.Sent_pkt + fr.Recv_pkt)
+	fr.AvgPktSize = (fr.Sent_b + fr.Recv_b) / float64(fr.Sent_pkt+fr.Recv_pkt)
 	logs.Debug("Average Packet Size: %s", FormatB(fr.AvgPktSize))
 	return
 }
@@ -199,7 +215,7 @@ func (fr *Frame) ComputeAvgPktSize() {
 type TransmissionWindow struct {
 	Packets                   []*Frame // List of packets to query
 	BitsProcessed             float64  // Total size of packets in bits
-	PacketsServiced           int      // Number of packets
+	FramesServiced            int      // Number of packets
 	AvgPacketSize             float64  // Average size of packets in bits
 	AvgPacketTransmissionTime float64  // Average time to transmit a single packet in seconds
 	TotalTransmissionTime     float64  // total transmission time in seconds

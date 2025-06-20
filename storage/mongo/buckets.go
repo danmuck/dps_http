@@ -12,17 +12,20 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type MongoBucket struct {
+// mongoBucket is a wrapper around a MongoDB collection for storing key-value pairs.
+type mongoBucket struct {
 	id    string
 	count int64 // for internal use, future use
 	size  int64 // for internal use, future use
 	*mongo.Collection
 }
 
-func NewMongoBucket(db *mongo.Database, id string) *MongoBucket {
+// newMongoBucket creates an instance using the MongoDB collection to the given id
+// bucket name is aliased to id for future
+func newMongoBucket(db *mongo.Database, id string) *mongoBucket {
 	logs.Init("NewMongoBucket %q", id)
 	collection := db.Collection(id)
-	return &MongoBucket{
+	return &mongoBucket{
 		id:         id,
 		count:      0, // not in use
 		size:       0, // not in use
@@ -30,14 +33,20 @@ func NewMongoBucket(db *mongo.Database, id string) *MongoBucket {
 	}
 }
 
-func (b *MongoBucket) Name() string {
+// Name returns the bucket id
+func (b *mongoBucket) Name() string {
 	return b.id
 }
-func (b *MongoBucket) String() string {
+
+// String returns a string representation of the bucket
+// note: this will change in the future therefore its structure
+// is not reliable
+func (b *mongoBucket) String() string {
 	return fmt.Sprintf("MongoBucket(id=%q, count=%d, size=%d)", b.id, b.count, b.size)
 }
 
-func (b *MongoBucket) Store(key string, value any) error {
+// Store stores the given key-value pair in the bucket
+func (b *mongoBucket) Store(key string, value any) error {
 	_, err := b.UpdateOne(
 		context.Background(),
 		map[string]any{
@@ -55,16 +64,24 @@ func (b *MongoBucket) Store(key string, value any) error {
 	}
 	return nil
 }
-func (b *MongoBucket) Retrieve(key string) (any, error) {
+
+// Retrieve retrieves the value associated with the given key from the bucket
+// @TODO kinda bypassing this currently
+func (b *mongoBucket) Retrieve(key string) (any, error) {
 	logs.Dev("Retrieve not implemented for MongoBucket")
 	return nil, fmt.Errorf("Retrieve not applicable for a bucket")
 }
-func (b *MongoBucket) Delete(key string) error {
+
+// Delete deletes the key-value pair associated with the given key from the bucket
+func (b *mongoBucket) Delete(key string) error {
 	logs.Dev("Delete [%s] key=%q", b.Name(), key)
-	_, err := b.DeleteOne(context.Background(), map[string]any{"key": key})
+	_, err := b.DeleteOne(context.Background(), bson.M{"key": key})
 	return err
 }
-func (b *MongoBucket) Update(key string, value any) error {
+
+// Update simply replaces the value for a key
+// note: this is due to dps_storage integration down the road
+func (b *mongoBucket) Update(key string, value any) error {
 	filter := bson.M{"key": key}
 	update := bson.M{"$set": bson.M{"value": value}}
 
@@ -82,13 +99,18 @@ func (b *MongoBucket) Update(key string, value any) error {
 
 	return nil
 }
-func (b *MongoBucket) Patch(key string, updates map[string]any) error {
+
+// Patch the value for a key
+// this prepends the field name with "value." so that it complies with the
+// top level document structure {key: value} in which "username" is a field of value
+// as well as the MongoDB schema
+func (b *mongoBucket) Patch(key string, updates map[string]any) error {
 	logs.Init("Patch [%q] { %q : %v }", b.Name(), key, updates)
 
 	// Build a $set document that prefixes each field with "value."
 	patch := bson.M{}
 	for field, val := range updates {
-		patch["value."+field] = val
+		patch[storage.Prefix(field)] = val
 	}
 	logs.Log("patch bson : %v", patch)
 
@@ -110,7 +132,10 @@ func (b *MongoBucket) Patch(key string, updates map[string]any) error {
 	return nil
 }
 
-func (b *MongoBucket) Lookup(filter any) (map[string]any, bool) {
+// Lookup retrieves a document from the bucket based on the provided filter.
+// The filter is cleaned according to config @REMINDER currently in utils.go
+// and prefixed to ensure compliance with the MongoDB schema. (storage/utils.go)
+func (b *mongoBucket) Lookup(filter any) (map[string]any, bool) {
 	mongoFilter := storage.CleanAndPrefix(filter)
 	logs.Init("Lookup filter : %v", mongoFilter)
 
@@ -140,7 +165,9 @@ func (b *MongoBucket) Lookup(filter any) (map[string]any, bool) {
 	logs.Log("found user map: %v", userMap["username"])
 	return userMap, true
 }
-func (b *MongoBucket) ListKeys() ([]any, error) {
+
+// ListKeys retrieves all keys from the bucket
+func (b *mongoBucket) ListKeys() ([]any, error) {
 	logs.Init("List [%s]", b.Name())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -165,7 +192,9 @@ func (b *MongoBucket) ListKeys() ([]any, error) {
 	return results, nil
 }
 
-func (b *MongoBucket) ListItems() ([]map[string]any, error) {
+// ListItems retrieves all items from the bucket
+// note: you will need to validate the result before using it
+func (b *mongoBucket) ListItems() ([]map[string]any, error) {
 	logs.Init("ListItems [%s]", b.Name())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -190,7 +219,8 @@ func (b *MongoBucket) ListItems() ([]map[string]any, error) {
 	return results, nil
 }
 
-func (b *MongoBucket) Count() (int64, error) {
+// Get the number of keys in the bucket
+func (b *mongoBucket) Count() (int64, error) {
 	logs.Init("Count [%s]", b.Name())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

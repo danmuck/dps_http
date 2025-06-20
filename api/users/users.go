@@ -2,97 +2,21 @@ package users
 
 import (
 	// "encoding/json"
+
+	"crypto/sha512"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"time"
 
+	"github.com/danmuck/dps_http/api/auth"
 	"github.com/danmuck/dps_http/api/logs"
-	"github.com/danmuck/dps_http/api/utils"
+	"github.com/danmuck/dps_http/api/types"
 	"github.com/danmuck/dps_http/storage"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-type ContactInfo struct {
-	Email    string `json:"email" bson:"email"`
-	Phone    string `json:"phone,omitempty" bson:"phone,omitempty"`
-	Location string `json:"location,omitempty" bson:"location,omitempty"`
-	Website  string `json:"website,omitempty" bson:"website,omitempty"`
-	LinkedIn string `json:"linkedin,omitempty" bson:"linkedin,omitempty"`
-	GitHub   string `json:"github,omitempty" bson:"github,omitempty"`
-}
-
-type ProjectInfo struct {
-	Name        string   `json:"name" bson:"name"`
-	Description string   `json:"description,omitempty" bson:"description,omitempty"`
-	Highlights  string   `json:"highlights,omitempty" bson:"highlights,omitempty"`
-	Role        string   `json:"role,omitempty" bson:"role,omitempty"`
-	URL         string   `json:"url,omitempty" bson:"url,omitempty"`
-	TechStack   []string `json:"tech_stack,omitempty" bson:"tech_stack,omitempty"`
-}
-
-type AdminInfo struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty" json:"_id"`
-	Username     string             `bson:"username" json:"username"`
-	PasswordHash string             `bson:"password_hash" json:"-"`
-	Token        string             `bson:"token" json:"-"`
-	Roles        []string           `bson:"roles" json:"roles"`
-}
-
-type ProfileInfo struct {
-	Bio       string             `json:"bio,omitempty" bson:"bio,omitempty"`
-	AvatarURL string             `json:"avatar_url,omitempty" bson:"avatar_url,omitempty"`
-	CreatedAt primitive.DateTime `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt primitive.DateTime `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-}
-
-type CareerInfo struct {
-	CurrentRole string   `json:"current_role,omitempty" bson:"current_role,omitempty"`
-	Skills      []string `json:"skills,omitempty" bson:"skills,omitempty"`
-	Experience  string   `json:"experience,omitempty" bson:"experience,omitempty"`
-	Education   string   `json:"education,omitempty" bson:"education,omitempty"`
-	Interests   []string `json:"interests,omitempty" bson:"interests,omitempty"`
-}
-
-// User represents an authenticated user
-type User struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty" json:"_id"`
-	Username     string             `bson:"username" json:"username"`
-	Email        string             `bson:"email" json:"email"`
-	PasswordHash string             `bson:"password_hash" json:"-"`
-	Token        string             `bson:"token" json:"-"`
-	Roles        []string           `bson:"roles" json:"roles"`
-
-	Bio       string             `bson:"bio,omitempty" json:"bio,omitempty"`
-	AvatarURL string             `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
-	CreatedAt primitive.DateTime `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt primitive.DateTime `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-}
-
-func (u *User) string() string {
-	var token string = "[no token]"
-	if len(u.Token) > 20 {
-		token = u.Token[:10] + " ... " + u.Token[len(u.Token)-10:]
-	}
-	return fmt.Sprintf(`
-	User: %s
-	Password: %s
-	Email: %s
-	Roles: %v
-	Token: [%s]
-
-	CreatedAt: %s
-	UpdatedAt: %s
-	Bio: %s
-	AvatarURL: %s
-`,
-		u.Username, u.PasswordHash, u.Email, u.Roles, token,
-		u.CreatedAt.Time(),
-		u.UpdatedAt.Time(), u.Bio, u.AvatarURL)
-
-}
 
 func GetUser(store storage.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -109,14 +33,14 @@ func GetUser(store storage.Client) gin.HandlerFunc {
 		logs.Log("raw user map: %v", raw["username"])
 
 		rawBSON, _ := bson.Marshal(raw)
-		var user User
+		var user types.User
 		if err := bson.Unmarshal(rawBSON, &user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse user"})
 			return
 		}
 
 		// return the User struct
-		logs.Log("got user %s", user.string())
+		logs.Log("got user %s", user.String())
 		c.JSON(http.StatusOK, user)
 	}
 }
@@ -237,7 +161,7 @@ func CreateUser(store storage.Client) gin.HandlerFunc {
 
 		logs.Log("[DEV]> Creating user: %s", username)
 
-		hash, err := utils.HashPassword(password)
+		hash, err := auth.HashPassword(password)
 		if err != nil {
 			logs.Log("[DEV]> Hashing error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -246,22 +170,24 @@ func CreateUser(store storage.Client) gin.HandlerFunc {
 			})
 			return
 		}
+		t := sha512.Sum512([]byte("asdasd"))
+		logs.Dev("token: %s", t)
 
 		logs.Log("[DEV]> Hashed password: %s", hash)
-		user := User{
+		user := types.User{
 			ID:           primitive.NewObjectID(),
 			Username:     username,
 			Email:        email,
 			PasswordHash: hash,
 			Roles:        []string{"dummy"},
-			Token:        "DEV_TOKEN",
+			Token:        "NEW_USER_TOKEN",
 			Bio:          "the dev. the creator.. ... ..i'm special",
 			AvatarURL:    "/dm_logo.svg",
 			CreatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 			UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 		}
 
-		logs.Log("[DEV]> User object: %s", user.string())
+		logs.Log("[DEV]> User object: %s", user.String())
 
 		// Store the user in the database
 		if err := store.Store("users", user.ID.Hex(), user); err != nil {

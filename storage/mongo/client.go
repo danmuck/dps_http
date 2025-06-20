@@ -17,7 +17,7 @@ type MongoClient struct {
 	t        string // e.g., "MongoDB"
 	client   *mongo.Client
 	db       *mongo.Database
-	buckets  map[string]*MongoBucket
+	buckets  map[string]*mongoBucket
 }
 
 func NewMongoStore(uri, dbName string) (*MongoClient, error) {
@@ -40,18 +40,27 @@ func NewMongoStore(uri, dbName string) (*MongoClient, error) {
 		t:       "mongo",
 		client:  client,
 		db:      db,
-		buckets: make(map[string]*MongoBucket),
+		buckets: make(map[string]*mongoBucket),
 	}, nil
 }
+
+// Name returns the name of the MongoDB Database
 func (ms *MongoClient) Name() string {
 	return ms.name
 }
+
+// Type returns the type of storage
+// -> "mongo"
 func (ms *MongoClient) Type() string {
 	return ms.t
 }
+
+// for future use
 func (md *MongoClient) Location() string {
 	return md.location
 }
+
+// MongoDB client Ping wrapper
 func (ms *MongoClient) Ping(ctx context.Context) error {
 	return ms.client.Ping(ctx, nil)
 }
@@ -63,7 +72,7 @@ func (ms *MongoClient) ConnectOrCreateBucket(bucket string) storage.Bucket {
 	collection, exists := ms.buckets[bucket]
 	if !exists || collection == nil {
 		logs.Log("Create [%s]", bucket)
-		collection = NewMongoBucket(ms.db, bucket)
+		collection = newMongoBucket(ms.db, bucket)
 		ms.buckets[bucket] = collection
 	}
 	logs.Log("Connect [%s]", bucket)
@@ -96,30 +105,38 @@ func (ms *MongoClient) Delete(bucket string, key string) error {
 	return err
 }
 
-// TODO: implement
+// Directly updates a value by key in a bucket
 func (ms *MongoClient) Update(bucket string, key string, value any) error {
 	logs.Init("Update [%q] { %q : %v }", bucket, key, value)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Update(key, value)
 }
+
+// Patch fields on the value of a key in a bucket
 func (ms *MongoClient) Patch(bucket, key string, updates map[string]any) error {
 	logs.Init("Patch [%q] key %q updates: %v", bucket, key, updates)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Patch(key, updates)
 }
 
+// Lookup a key in a bucket by field key
+// note: this is gated by the allowed filter in storage/utils
+// this is for user scope interactions
+// @TODO admin version
 func (ms *MongoClient) Lookup(bucket string, filter any) (map[string]any, bool) {
 	logs.Init("Lookup [%q] filter: %v", bucket, filter)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.Lookup(filter)
 }
 
+// Retrieve a list of all keys in a bucket
 func (ms *MongoClient) List(bucket string) ([]any, error) {
 	logs.Init("List [%s]", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	return collection.ListKeys()
 }
 
+// Count the number of keys in a bucket
 func (ms *MongoClient) Count(bucket string) (int64, error) {
 	logs.Init("Count [%s]", bucket)
 	collection := ms.ConnectOrCreateBucket(bucket)

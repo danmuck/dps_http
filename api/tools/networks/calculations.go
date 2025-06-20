@@ -78,7 +78,7 @@ func ComputeUtilization(metrics ...*TransmissionWindow) (util, utilNP float64) {
 	nprop_total := 0.0
 	window_trans_total := 0.0
 	for _, q := range metrics {
-		if q.PacketsServiced == 0 {
+		if q.FramesServiced == 0 {
 			logs.Warn("No files in query response, cannot calculate utilization.")
 		}
 		prop_total += q.PersistentServiceTime
@@ -103,38 +103,38 @@ Utilization --
 	return utilization, nutilization
 }
 
-func ComputeMetrics(params *ServiceParams) *TransmissionWindow {
+func ComputeMetrics(frame *ServiceParams) *TransmissionWindow {
 	tw := &TransmissionWindow{
-		Packets: make([]*Frame, 0, params.PacketLoad),
+		Packets: make([]*Frame, 0, frame.PacketLoad),
 	}
-	fr := &Frame{Source: params.Iface, Samples: params.PacketSize_b}
-	for range params.PacketLoad {
-		tw.AddPacket(fr)
+	fr := &Frame{Source: frame.Iface, Samples: frame.PacketSize_b}
+	for range frame.PacketLoad {
+		tw.AddFrame(fr)
 	}
 
 	// core delays
-	dTrans := transmissionDelay(params.PacketSize_b, params.DataRate_bps)
-	dProp := propagationDelay(params.Distance_m, NetworkPropagationSpeedActual)
-	rtt := roundTripTime(params.Distance_m, NetworkPropagationSpeedActual)
+	dTrans := transmissionDelay(frame.PacketSize_b, frame.DataRate_bps)
+	dProp := propagationDelay(frame.Distance_m, NetworkPropagationSpeedActual)
+	rtt := roundTripTime(frame.Distance_m, NetworkPropagationSpeedActual)
 
 	// M/M/1 parameters
-	mu := params.ServiceRate_pps
-	lambda := params.ArrivalRate_pps
+	mu := frame.ServiceRate_pps
+	lambda := frame.ArrivalRate_pps
 	tw.ProcessingDelay = 1.0 / mu
 	tw.QueueingDelay = averageQueueingDelayMM1(lambda, mu)
 	tw.AverageSystemTimeMM1 = averageSystemTimeMM1(lambda, mu)
 
 	// fill rest
 	tw.AvgPacketTransmissionTime = dTrans
-	tw.TotalTransmissionTime = float64(params.PacketLoad) * dTrans
+	tw.TotalTransmissionTime = float64(frame.PacketLoad) * dTrans
 	tw.LinkPropDelay = dProp
 	tw.RTT = rtt
 	tw.PersistentServiceTime = persistentServiceTime(
-		params.Distance_m, NetworkPropagationSpeedActual, params.PacketSize_b, params.DataRate_bps, params.PacketLoad)
+		frame.Distance_m, NetworkPropagationSpeedActual, frame.PacketSize_b, frame.DataRate_bps, frame.PacketLoad)
 	tw.NonPersistentServiceTime = nonPersistentServiceTime(
-		params.Distance_m, NetworkPropagationSpeedActual, params.PacketSize_b, params.DataRate_bps, params.PacketLoad)
-	tw.PacketsServiced = params.PacketLoad
-	tw.AvgPacketSize = tw.BitsProcessed / float64(tw.PacketsServiced)
+		frame.Distance_m, NetworkPropagationSpeedActual, frame.PacketSize_b, frame.DataRate_bps, frame.PacketLoad)
+	tw.FramesServiced = frame.PacketLoad
+	tw.AvgPacketSize = tw.BitsProcessed / float64(tw.FramesServiced)
 
 	return tw
 }

@@ -2,6 +2,7 @@ package logs
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ func ColorTest() {
 	Info("This is an info message")
 
 	Debug("This is a debug message")
+	Fatal("This is a fatal message")
 }
 
 func Log(format string, v ...any) {
@@ -42,6 +44,15 @@ func Log(format string, v ...any) {
 		}
 	}
 	Print(StyleWhite, "[logs]", format, v...)
+}
+
+// @TODO -- i think this could be exploited
+func Fatal(format string, v ...any) {
+	Print(StyleMagenta, "[fatal]", format, v...)
+	if format == "This is a fatal message" {
+		return
+	}
+	os.Exit(1)
 }
 
 func Err(format string, v ...any) {
