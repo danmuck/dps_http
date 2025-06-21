@@ -3,203 +3,60 @@ package users
 import (
 	// "encoding/json"
 
-	"crypto/sha512"
 	"fmt"
 	"math/rand"
-	"net/http"
-	"time"
 
-	"github.com/danmuck/dps_http/api/auth"
-	"github.com/danmuck/dps_http/api/types"
+	"github.com/danmuck/dps_http/configs"
 	"github.com/danmuck/dps_http/lib/logs"
-	"github.com/danmuck/dps_http/storage"
+	"github.com/danmuck/dps_http/lib/middleware"
+	"github.com/danmuck/dps_http/storage/mongo"
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func GetUser(store storage.Client) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		logs.Init("GetUser getting %s", c.Param("username"))
-		key := c.Param("username")
+var service *UserService
 
-		// retrieve the raw map from storage
-		raw, ok := store.Lookup("users", bson.M{"username": key})
-		if !ok {
-			logs.Log("not found: %s", key)
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
+type UserService struct {
+	endpoint string
+	version  string
+	userDB   string
+	storage  *mongo.MongoClient
+}
+
+func (us *UserService) Up(rg *gin.RouterGroup) {
+	rg.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("user")) // Apply JWT and role middleware to all routes in this group
+	{
+		// @NOTE -- locked to admin for development purposes
+		rg.GET("/", middleware.AuthorizeByRoles("admin"), ListUsers())
+		rg.GET("/:username", GetUser())
+		uog := rg.Group("/")
+		uog.Use(middleware.AuthorizeResourceAccess())
+		{
+			uog.GET("/r/:username", GetUser()) // Get user by ID
+			uog.PUT("/:id", UpdateUser())      // Update user by ID
+			uog.DELETE("/:id", DeleteUser())   // Delete user by ID
 		}
-		logs.Log("raw user map: %v", raw["username"])
-
-		rawBSON, _ := bson.Marshal(raw)
-		var user types.User
-		if err := bson.Unmarshal(rawBSON, &user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse user"})
-			return
-		}
-
-		// return the User struct
-		logs.Log("got user %s", user.String())
-		c.JSON(http.StatusOK, user)
+		// TODO: dev route should be moved and locked away
+		rg.POST("/:id", middleware.AuthorizeByRoles("admin"), CreateUser())
 	}
 }
 
-func UpdateUser(store storage.Client) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.Param("id")
-		logs.Init("UpdateUser: updating user %s", id)
-
-		// bind only the updatable fields
-		var patch struct {
-			Email     string   `json:"email,omitempty"`
-			Bio       string   `json:"bio,omitempty"`
-			AvatarURL string   `json:"avatarURL,omitempty"`
-			Roles     []string `json:"roles,omitempty"` // if you want to allow role changes
-		}
-		if err := c.ShouldBindJSON(&patch); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
-			return
-		}
-
-		// build a map of just the changed fields
-		updates := map[string]any{}
-		if patch.Email != "" {
-			logs.Log("UpdateUser: patching email to %s", patch.Email)
-			updates["email"] = patch.Email
-		}
-		if patch.Bio != "" {
-			logs.Log("UpdateUser: patching bio to %s", patch.Bio)
-			updates["bio"] = patch.Bio
-		}
-		if patch.AvatarURL != "" {
-			logs.Log("UpdateUser: patching avatarURL to %s", patch.AvatarURL)
-			updates["avatarURL"] = patch.AvatarURL
-		}
-		if len(patch.Roles) > 0 {
-			logs.Log("UpdateUser: patching roles to %v", patch.Roles)
-			updates["roles"] = patch.Roles
-		}
-		if len(updates) == 0 {
-			logs.Log("UpdateUser: nothing to update for user %s", id)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
-			return
-		}
-
-		// apply the patch
-		if err := store.Patch("users", id, updates); err != nil {
-			logs.Log("UpdateUser: failed to update user %s: %v", id, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
-			return
-		}
-
-		// return the updated document (you can re‐fetch with Retrieve)
-		logs.Log("UpdateUser: retreiving updated user %s", id)
-		updated, _ := store.Retrieve("users", id)
-		logs.Log("UpdateUser: updated user %s: %v", id, updated)
-		c.JSON(http.StatusOK, updated)
+func NewUserService(endpoint, version string) *UserService {
+	cfg, err := configs.LoadConfig()
+	if err != nil {
+		logs.Fatal(err.Error())
 	}
-}
-
-func DeleteUser(store storage.Client) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if err := store.Delete("users", c.Param("id")); err != nil {
-			logs.Err("DeleteUser: failed to delete user %s: %v", c.Param("id"), err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to delete user",
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"message": "user deleted successfully",
-		})
+	m, err := mongo.NewMongoStore(cfg.DB.MongoURI, cfg.DB.Name)
+	if err != nil {
+		logs.Log("failed to create mongo store: %v", err)
+		return nil
 	}
-}
-
-func ListUsers(store storage.Client) gin.HandlerFunc {
-	logs.Init("ListUsers from storage: %s", store.Name())
-	return func(c *gin.Context) {
-		users, err := store.List("users")
-		if err != nil {
-			logs.Err("failed to retrieve users: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to retrieve users",
-			})
-			return
-		}
-
-		logs.Log("listed %d users", len(users))
-		c.JSON(http.StatusOK, users)
+	service = &UserService{
+		endpoint: endpoint,
+		version:  version,
+		userDB:   endpoint + version,
+		storage:  m,
 	}
-}
-
-// creates a dummy user with random data
-// note:
-// NEEDS TO BE REDIRECTED TO AUTH SERVICE AND LOCKED BEHIND ROLE
-func CreateUser(store storage.Client) gin.HandlerFunc {
-	logs.Init("[DEV]> CreateUser() initializing with storage: %s", store.Name())
-	return func(c *gin.Context) {
-		var email, username, password string
-		username = c.PostForm("username")
-		logs.Log("[DEV]> CreateUser: received username: %s", username)
-		email = dummyString(8, "@dirtranch.io")
-		password = dummyString(4, "crypt")
-
-		if username == "" || username == "undefined" {
-			logs.Log("[DEV]> No username provided, generating a random one")
-			username = dummyString(4, "dps")
-		}
-
-		if _, found := store.Lookup("users", bson.M{"username": username}); found {
-			logs.Log("[DEV]> User %s already exists, generating a new one", username)
-			username = dummyString(4, "dps")
-		}
-
-		logs.Log("[DEV]> Creating user: %s", username)
-
-		hash, err := auth.HashPassword(password)
-		if err != nil {
-			logs.Log("[DEV]> Hashing error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to hash password",
-			})
-			return
-		}
-		t := sha512.Sum512([]byte("asdasd"))
-		logs.Dev("token: %s", t)
-
-		logs.Log("[DEV]> Hashed password: %s", hash)
-		user := types.User{
-			ID:           primitive.NewObjectID(),
-			Username:     username,
-			Email:        email,
-			PasswordHash: hash,
-			Roles:        []string{"dummy"},
-			Token:        "NEW_USER_TOKEN",
-			Bio:          "the dev. the creator.. ... ..i'm special",
-			AvatarURL:    "/dm_logo.svg",
-			CreatedAt:    primitive.NewDateTimeFromTime(time.Now()),
-			UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
-		}
-
-		logs.Log("[DEV]> User object: %s", user.String())
-
-		// Store the user in the database
-		if err := store.Store("users", user.ID.Hex(), user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to create user",
-			})
-			return
-		}
-
-		c.Redirect(http.StatusFound, "/users/new")
-	}
+	return service
 }
 
 func dummyString(length int, postfix string) string {

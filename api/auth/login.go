@@ -6,7 +6,6 @@ import (
 
 	"github.com/danmuck/dps_http/api/types"
 	"github.com/danmuck/dps_http/lib/logs"
-	"github.com/danmuck/dps_http/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -16,8 +15,8 @@ import (
 // LoginHandler handles user login.
 // It validates the input, looks up the user by username,
 // checks the password against the stored hash, and signs a JWT token.
-func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
-	logs.Init("LoginHandler() initializing with JWT secret: %s", jwtSecret)
+func LoginHandler() gin.HandlerFunc {
+	logs.Init("LoginHandler() initializing with JWT secret: %s", service.secret)
 
 	return func(c *gin.Context) {
 		var in loginPayload
@@ -29,7 +28,7 @@ func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 
 		// lookup user by username
 		logs.Log("received login request for user: %s", in.Username)
-		raw, found := store.Lookup("users", bson.M{"username": in.Username})
+		raw, found := service.storage.Lookup(service.userDB, bson.M{"username": in.Username})
 		if !found {
 			logs.Log("user not found: %s", in.Username)
 			c.JSON(401, gin.H{"error": "invalid credentials"})
@@ -58,7 +57,7 @@ func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 			"roles":    user.Roles,
 			"exp":      time.Now().Add(24 * time.Hour).Unix(),
 		})
-		signed, err := token.SignedString([]byte(jwtSecret))
+		signed, err := token.SignedString([]byte(service.secret))
 		if err != nil {
 			logs.Log("failed to sign token for user %s: %v", user.Username, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign token"})
@@ -66,7 +65,7 @@ func LoginHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 		}
 
 		logs.Log("token signed successfully for user: %s \n  ...%v with hash: %s",
-			user.Username, signed[len(signed)-20:], jwtSecret)
+			user.Username, signed[len(signed)-20:], service.secret)
 
 		c.SetCookie("jwt", signed, 3600*24, "/", "localhost", true, true)
 		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", true, false)

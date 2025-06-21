@@ -1,6 +1,11 @@
 package auth
 
 import (
+	"github.com/danmuck/dps_http/configs"
+	"github.com/danmuck/dps_http/lib/logs"
+	"github.com/danmuck/dps_http/lib/middleware"
+	"github.com/danmuck/dps_http/storage/mongo"
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -32,4 +37,46 @@ func VerifyPassword(hashed, password string) bool {
 		return false
 	}
 	return true
+}
+
+// interface impl
+// //
+var service *AuthService
+
+type AuthService struct {
+	endpoint, version string
+	secret            string
+	userDB            string
+	storage           *mongo.MongoClient
+}
+
+func (as *AuthService) Up(rg *gin.RouterGroup) {
+	middleware.InitAuthMiddleware(service.secret)
+	rg.POST("/login", LoginHandler())
+	rg.POST("/logout", LogoutHandler())
+	rg.POST("/register", RegisterHandler())
+}
+
+func (as *AuthService) Down() error {
+	return nil
+}
+
+func NewAuthService(endpoint, version string) *AuthService {
+	cfg, err := configs.LoadConfig()
+	if err != nil {
+		logs.Fatal(err.Error())
+	}
+	m, err := mongo.NewMongoStore(cfg.DB.MongoURI, cfg.DB.Name)
+	if err != nil {
+		logs.Log("failed to create mongo store: %v", err)
+		return nil
+	}
+	service = &AuthService{
+		endpoint: endpoint,
+		version:  version,
+		userDB:   "users" + version, // need to fix this
+		secret:   cfg.Auth.JWTSecret,
+		storage:  m,
+	}
+	return service
 }

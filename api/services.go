@@ -15,8 +15,8 @@ import (
 // Services must register their own routes with a gin router
 // service registration interface: services must implement register, start, and stop methods
 type Service interface {
-	Up(r *gin.Engine) // register service routes with gin engine
-	Down() error      // stop the service
+	Up(rg *gin.RouterGroup) // register service routes with gin engine
+	Down() error            // stop the service
 }
 
 // registry holds references to all registered services

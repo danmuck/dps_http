@@ -6,7 +6,6 @@ import (
 
 	"github.com/danmuck/dps_http/api/types"
 	"github.com/danmuck/dps_http/lib/logs"
-	"github.com/danmuck/dps_http/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,11 +14,11 @@ import (
 
 // RegisterHandler registers a new user, ensuring unique username and email,
 // hashes the password, assigns roles, stores the user, and returns a JWT cookie.
-func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
-	logs.Init("RegisterHandler() initializing with JWT secret: %s", jwtSecret)
-	logs.Init("using storage type: %s", store.Type())
-	logs.Init("using storage name: %s", store.Name())
-	logs.Init("using storage: %T", store)
+func RegisterHandler() gin.HandlerFunc {
+	logs.Init("RegisterHandler() initializing with JWT secret: %s", service.secret)
+	logs.Init("using storage type: %s", service.storage.Type())
+	logs.Init("using storage name: %s", service.storage.Name())
+	logs.Init("using storage: %T", service.storage)
 	return func(c *gin.Context) {
 
 		var in registerPayload
@@ -34,11 +33,11 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 
 		// uniqueness checks
 		// could extend these
-		if _, exists := store.Lookup("users", bson.M{"username": in.Username}); exists {
+		if _, exists := service.storage.Lookup(service.userDB, bson.M{"username": in.Username}); exists {
 			c.JSON(http.StatusConflict, gin.H{"error": "username already in use"})
 			return
 		}
-		if _, exists := store.Lookup("users", bson.M{"email": in.Email}); exists {
+		if _, exists := service.storage.Lookup(service.userDB, bson.M{"email": in.Email}); exists {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
 			return
 		}
@@ -74,14 +73,14 @@ func RegisterHandler(store storage.Client, jwtSecret string) gin.HandlerFunc {
 			"exp":      time.Now().Add(24 * time.Hour).Unix(),
 		})
 		logs.Log("signing token for user: %s", user.Username)
-		tokenString, err := token.SignedString([]byte(jwtSecret))
+		tokenString, err := token.SignedString([]byte(service.secret))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign token"})
 			return
 		}
 		logs.Log("token signed successfully for user: %s \n  %v", user.Username, tokenString)
 
-		if err := store.Store("users", user.ID.Hex(), user); err != nil {
+		if err := service.storage.Store(service.userDB, user.ID.Hex(), user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 			return
 		}

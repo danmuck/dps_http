@@ -16,14 +16,15 @@ import (
 
 // UserMetricsService is a service that provides user metrics.
 type UserMetricsService struct {
-	version         string
-	endpoint        string
-	tracking        string
+	version  string
+	endpoint string
+
 	total_users     int64
 	users_over_time map[string]int64
 	total_roles     map[string]int64
-	running         bool
-	bucket          storage.Client
+
+	running bool
+	bucket  storage.Client // mongo client
 
 	mu sync.Mutex
 }
@@ -57,20 +58,28 @@ func (svc *UserMetricsService) String() string {
 	`,
 		svc.version,
 		svc.total_users, svc.total_roles,
-		len(svc.users_over_time), svc.bucket)
+		len(svc.users_over_time), svc.bucket.Name())
 }
 
-func NewUserMetricsService() *UserMetricsService {
-	db, err := mongo.NewMongoStore("metrics", "users")
+func NewUserMetricsService(endpoint, version string) *UserMetricsService {
+	cfg, err := configs.LoadConfig()
 	if err != nil {
-		logs.Err("failed to connect to database: %v", err)
+		logs.Fatal(err.Error())
+	}
+	m, err := mongo.NewMongoStore(cfg.DB.MongoURI, cfg.DB.Name)
+	if err != nil {
+		logs.Log("failed to create mongo store: %v", err)
 		return nil
 	}
+	logs.Dev("initialized mongo store %s from %s", m.Name(), cfg.String())
 	return &UserMetricsService{
-		total_users: 0,
-		running:     false,
-		bucket:      db,
+		endpoint: endpoint,
+		version:  version,
 
+		bucket:  m,
+		running: false,
+
+		total_users:     0,
 		users_over_time: make(map[string]int64),
 		total_roles:     make(map[string]int64),
 	}
@@ -79,7 +88,7 @@ func NewUserMetricsService() *UserMetricsService {
 func MetricsHandler(svc *UserMetricsService) gin.HandlerFunc {
 	// note: this is a singleton service, so we can use a single instance
 	// it needs to be initialized at the server
-	logs.Init("initializing service handler [%s]", svc.String())
+	logs.Init("initializing service handler [%s.%s]", svc.endpoint, svc.version)
 	return func(c *gin.Context) {
 		svc.mu.Lock()
 		total_users := svc.total_users
