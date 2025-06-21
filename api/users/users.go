@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
-	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/api/types"
+	"github.com/danmuck/dps_http/lib/logs"
 	"github.com/danmuck/dps_http/storage"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"

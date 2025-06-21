@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/danmuck/dps_http/api/logs"
+	"github.com/danmuck/dps_http/lib/logs"
 	"github.com/shirou/gopsutil/net"
 )
 

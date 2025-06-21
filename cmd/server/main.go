@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
-	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/api/services/metrics"
 	"github.com/danmuck/dps_http/api/users"
 	"github.com/danmuck/dps_http/configs"
-	"github.com/danmuck/dps_http/middleware"
+	"github.com/danmuck/dps_http/lib/logs"
+	"github.com/danmuck/dps_http/lib/middleware"
 	"github.com/danmuck/dps_http/storage"
 	mongodb "github.com/danmuck/dps_http/storage/mongo"
 	"github.com/gin-contrib/cors"
@@ -52,12 +52,7 @@ func NewWebServer(cfg *configs.Config) *WebServer {
 
 func (ws *WebServer) registerServices() {
 	log.Println("[api] Registering services")
-	ums := metrics.NewUserMetricsService(
-		ws.store.ConnectOrCreateBucket("users"),
-		ws.store.ConnectOrCreateBucket("metrics"),
-	)
-	ums.Register(ws.router)
-	ums.Start()
+	metrics.NewUserMetricsService().Up(ws.router.Group("metrics"))
 }
 
 func (ws *WebServer) registerRoutes() {
