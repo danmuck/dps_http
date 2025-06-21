@@ -3,7 +3,7 @@ package networks
 import (
 	"math"
 
-	"github.com/danmuck/dps_http/api/logs"
+	"github.com/danmuck/dps_http/lib/logs"
 )
 
 const (

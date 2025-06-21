@@ -6,30 +6,24 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
-	"github.com/danmuck/dps_http/api/logs"
-	"github.com/danmuck/dps_http/api/services/metrics"
+	"github.com/danmuck/dps_http/api/metrics"
 	"github.com/danmuck/dps_http/api/users"
+	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/configs"
-	"github.com/danmuck/dps_http/middleware"
-	"github.com/danmuck/dps_http/storage"
-	mongodb "github.com/danmuck/dps_http/storage/mongo"
+	"github.com/danmuck/dps_http/lib/logs"
+	"github.com/danmuck/dps_http/lib/middleware"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 type WebServer struct {
-	cfg    *configs.Config
-	router *gin.Engine
-	store  storage.Client
+	cfg      *configs.Config
+	services map[string]api.Service
+	router   *gin.Engine
 }
 
 func NewWebServer(cfg *configs.Config) *WebServer {
-	store, err := mongodb.NewMongoStore(cfg.DB.MongoURI, cfg.DB.Name)
-	if err != nil {
-		log.Fatalf("failed to connect to MongoDB: %v", err)
-	}
-
 	r := gin.Default()
 	r.SetTrustedProxies([]string{"127.0.0.1", cfg.Domain})
 	r.Use(gin.Logger(), gin.Recovery())
@@ -43,50 +37,38 @@ func NewWebServer(cfg *configs.Config) *WebServer {
 	}))
 
 	ws := &WebServer{
-		cfg:    cfg,
-		store:  store,
-		router: r,
+		cfg:      cfg,
+		router:   r,
+		services: make(map[string]api.Service),
 	}
 	return ws
 }
 
 func (ws *WebServer) registerServices() {
 	log.Println("[api] Registering services")
-	ums := metrics.NewUserMetricsService(
-		ws.store.ConnectOrCreateBucket("users"),
-		ws.store.ConnectOrCreateBucket("metrics"),
-	)
-	ums.Register(ws.router)
-	ums.Start()
+	root := ws.router.Group("/")
+	{
+		root.GET("/", func(c *gin.Context) {
+			c.JSON(http.StatusMovedPermanently, gin.H{"message": "Welcome to DPS backend"})
+		})
+	}
+
+	ws.services["auth"] = auth.NewAuthService("auth")
+	ws.services["users"] = users.NewUserService("users")
+	ws.services["metrics"] = metrics.NewUserMetricsService("metrics")
+
+	v1 := root.Group(api.VERSION)
+	var buf []api.Service = make([]api.Service, 0)
+	for _, svc := range ws.services {
+		if svc.DependsOn() != nil {
+			buf = append(buf, svc)
+			continue
+		}
+		svc.Up(v1)
+	}
 }
 
 func (ws *WebServer) registerRoutes() {
-	middleware.InitAuthMiddleware(ws.cfg.Auth.JWTSecret)
-	rg := ws.router.Group("/auth")
-	{
-		rg.POST("/login", auth.LoginHandler(ws.store, ws.cfg.Auth.JWTSecret))
-		rg.POST("/logout", auth.LogoutHandler())
-		rg.POST("/register", auth.RegisterHandler(ws.store, ws.cfg.Auth.JWTSecret))
-	}
-	ug := ws.router.Group("/users")
-	ug.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("user")) // Apply JWT and role middleware to all routes in this group
-	{
-		// @NOTE -- locked to admin for development purposes
-		ug.GET("/", middleware.AuthorizeByRoles("admin"), users.ListUsers(ws.store))
-		ug.GET("/:username", users.GetUser(ws.store))
-		uog := ug.Group("/")
-		uog.Use(middleware.AuthorizeResourceAccess())
-		{
-			uog.GET("/r/:username", users.GetUser(ws.store)) // Get user by ID
-			uog.PUT("/:id", users.UpdateUser(ws.store))      // Update user by ID
-			uog.DELETE("/:id", users.DeleteUser(ws.store))   // Delete user by ID
-		}
-		// TODO: dev route should be moved and locked away
-		ug.POST("/:id", middleware.AuthorizeByRoles("admin"), users.CreateUser(ws.store))
-	}
-	admin := ws.router.Group("/metrics")
-	admin.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("admin"))
-
 	dev := ws.router.Group("/dev")
 	dev.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("dev"))
 
@@ -111,13 +93,6 @@ func main() {
 
 	server := NewWebServer(cfg)
 	r := server.router
-
-	root := r.Group("/")
-	{
-		root.GET("/", func(c *gin.Context) {
-			c.JSON(http.StatusMovedPermanently, gin.H{"message": "Welcome to DPS backend"})
-		})
-	}
 
 	server.registerRoutes()
 	r.Run(":" + cfg.Port)

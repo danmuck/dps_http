@@ -5,7 +5,7 @@ import (
 
 	"slices"
 
-	"github.com/danmuck/dps_http/api/logs"
+	"github.com/danmuck/dps_http/lib/logs"
 )
 
 func (l *TransmissionWindow) AddFrame(pkt *Frame) {

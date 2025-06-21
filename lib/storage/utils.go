@@ -3,7 +3,7 @@ package storage
 import (
 	"slices"
 
-	"github.com/danmuck/dps_http/api/logs"
+	"github.com/danmuck/dps_http/lib/logs"
 	"go.mongodb.org/mongo-driver/bson"
 )
 

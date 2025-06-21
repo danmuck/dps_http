@@ -2,121 +2,119 @@ package metrics
 
 import (
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
-	"github.com/danmuck/dps_http/api/logs"
 	"github.com/danmuck/dps_http/configs"
-	"github.com/danmuck/dps_http/storage"
+	"github.com/danmuck/dps_http/lib/logs"
+	"github.com/danmuck/dps_http/lib/middleware"
+	"github.com/danmuck/dps_http/lib/storage"
+	"github.com/danmuck/dps_http/lib/storage/mongo"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+var service *UserMetricsService
+
 // UserMetricsService is a service that provides user metrics.
 type UserMetricsService struct {
-	version         string
-	endpoint        string
-	tracking        string
+	version  string
+	endpoint string
+
 	total_users     int64
 	users_over_time map[string]int64
 	total_roles     map[string]int64
-	running         bool
-	buckets         []storage.Bucket
+
+	running   bool
+	userDB    string
+	metricsDB string
+	storage   storage.Client // mongo client
 
 	mu sync.Mutex
+}
+
+//	Service interface implementation
+//
+// //
+func (svc *UserMetricsService) Up(rg *gin.RouterGroup) {
+	logs.Init("Register %s", service.metricsDB)
+	admin := rg.Group("/metrics")
+	admin.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("admin"))
+	admin.GET("/users", UserGrowth(svc))
+	svc.start()
+}
+
+func (svc *UserMetricsService) Down() error {
+	svc.mu.Lock()
+	svc.running = false
+	svc.mu.Unlock()
+	logs.Log("stopped")
+	return nil
+}
+
+func (svc *UserMetricsService) Version() string {
+	return svc.version
+}
+
+func (svc *UserMetricsService) DependsOn() []string {
+	return nil
 }
 
 func (svc *UserMetricsService) String() string {
 	return fmt.Sprintf(`
 	UserMetricsService:
 		Version: %s
-		Endpoint: %s
-		Tracking: %s
 
 		total users: %d
 		growth data: %v
 		role counts: %v
-		buckets: %v
+		bucket: %v
 	`,
-		svc.version, svc.endpoint, svc.tracking,
-		svc.total_users, svc.total_roles, len(svc.users_over_time), svc.buckets)
+		svc.version,
+		svc.total_users, svc.total_roles,
+		len(svc.users_over_time), svc.storage.Name())
 }
 
-func NewUserMetricsService(store ...storage.Bucket) *UserMetricsService {
-	return &UserMetricsService{
-		version:     "1.0.0",
-		endpoint:    "/metrics",
-		tracking:    "users",
-		total_users: 0,
-		running:     false,
-		buckets:     store,
+func NewUserMetricsService(endpoint string) *UserMetricsService {
+	cfg, err := configs.LoadConfig()
+	if err != nil {
+		logs.Fatal(err.Error())
+	}
+	m, err := mongo.NewMongoStore(cfg.DB.MongoURI, cfg.DB.Name)
+	if err != nil {
+		logs.Log("failed to create mongo store: %v", err)
+		return nil
+	}
+	logs.Dev("initialized mongo store %s from %s", m.Name(), cfg.String())
+	version := "v1"
 
+	service = &UserMetricsService{
+		endpoint: endpoint,
+		version:  version,
+
+		storage:   m,
+		userDB:    "users" + version,
+		metricsDB: endpoint + version,
+		running:   false,
+
+		total_users:     0,
 		users_over_time: make(map[string]int64),
 		total_roles:     make(map[string]int64),
 	}
+	return service
 }
 
-func MetricsHandler(svc *UserMetricsService) gin.HandlerFunc {
-	// note: this is a singleton service, so we can use a single instance
-	// it needs to be initialized at the server
-	logs.Init("initializing service handler [%s]", svc.String())
-	return func(c *gin.Context) {
-		svc.mu.Lock()
-		total_users := svc.total_users
-		total_roles := svc.total_roles
-		users_over_time_points := MapTimestampToInt64Points(svc.users_over_time)
-		logs.Info("total users: %d, total roles: %v", total_users, total_roles)
-		if total_users == 0 {
-			logs.Warn("no users found, returning empty metrics")
-			c.JSON(http.StatusOK, gin.H{
-				"total_users":     0,
-				"total_roles":     make(map[string]int64),
-				"users_over_time": []Point{},
-				"message":         "no users found",
-			})
-			svc.mu.Unlock()
-			return
-		}
-		svc.mu.Unlock()
-
-		logs.Debug("service: %+v", svc)
-
-		c.JSON(http.StatusOK, gin.H{
-			"total_users":     total_users,
-			"total_roles":     total_roles,
-			"users_over_time": users_over_time_points,
-			"message":         "user metrics retrieved successfully",
-		})
-	}
-}
-
-//	ServiceReg interface implementation
-//
-// //
-func (svc *UserMetricsService) Register(router *gin.Engine) {
-	logs.Init("Register %s", svc.endpoint)
-	rg := router.Group(svc.endpoint)
-	rg.GET("/users", MetricsHandler(svc))
-}
-
-func (svc *UserMetricsService) Stop() {
-	svc.mu.Lock()
-	svc.running = false
-	svc.mu.Unlock()
-	logs.Log("stopped")
-}
-
-func (svc *UserMetricsService) Start() {
+func (svc *UserMetricsService) start() {
 	logs.Init("starting ...")
-	total_users, err := svc.GetBucket("users").Count()
+	total_users, err := svc.storage.ConnectOrCreateBucket(service.userDB).Count()
 	if err != nil {
 		logs.Err("failed to retrieve user count: %v", err)
 		return
 	}
 	logs.Log("loaded %d users", total_users)
 	svc.total_users = total_users
-	users_over_time, err := svc.GetBucket("metrics").ListItems()
+	users_over_time, err := svc.storage.ConnectOrCreateBucket(service.metricsDB).ListItems()
 	if err != nil {
 		logs.Err("failed to retrieve user metrics: %v", err)
 		return
@@ -156,47 +154,14 @@ func (svc *UserMetricsService) Start() {
 	logs.Info("initialized with %d users, roles: %v, users_over_time points: %v",
 		total_users, total_roles, len(total_over_time))
 
-	go backgroundService(svc)
-}
-
-//	Potential interface extension
-//	debug:
-//
-// //
-func (svc *UserMetricsService) IsRunning() bool {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
-	return svc.running
-}
-
-func (svc *UserMetricsService) GetVersion() string {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
-	return svc.version
-}
-
-func (svc *UserMetricsService) GetEndpoint() string {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
-	return svc.endpoint
-}
-
-func (svc *UserMetricsService) GetBucket(name string) storage.Bucket {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
-	for _, b := range svc.buckets {
-		if b.Name() == name {
-			return b
-		}
-	}
-	return nil
+	go backgroundService()
 }
 
 func (svc *UserMetricsService) UserCountByRole() (map[string]int64, error) {
 	logs.Init("UserCountByRole")
 	roleCounts := make(map[string]int64)
 
-	store := svc.GetBucket("users")
+	store := svc.storage.ConnectOrCreateBucket(service.userDB)
 	users, err := store.ListKeys()
 	if err != nil {
 		logs.Err("failed to list users: %v", err)
@@ -234,36 +199,36 @@ func (svc *UserMetricsService) UserCountByRole() (map[string]int64, error) {
 //	Private handler for service lifecycle management
 //
 // //
-func backgroundService(svc *UserMetricsService) {
-	if !svc.IsRunning() {
+func backgroundService() {
+	if !service.running {
 		logs.Warn("is not running, exiting handler")
 		return
 	}
 
 	logs.Info("starting %s cycle", configs.METRICS_delay.String())
-	defer svc.Stop()
+	defer service.Down()
 
-	for svc.IsRunning() {
+	for service.running {
 		logs.Log("processing metrics...")
-		total_users, err := svc.GetBucket("users").Count()
+		total_users, err := service.storage.ConnectOrCreateBucket(service.userDB).Count()
 		if err != nil {
 			logs.Err("failed to retrieve user count: %v", err)
 			return
 		}
 
-		roles, err := svc.UserCountByRole()
+		roles, err := service.UserCountByRole()
 		if err != nil {
 			logs.Err("failed to retrieve user roles: %v", err)
 			return
 		}
-		svc.mu.Lock()
-		svc.users_over_time[time.Now().Format(time.Stamp)] = total_users
-		svc.total_roles = roles
-		svc.total_users = total_users
-		svc.mu.Unlock()
+		service.mu.Lock()
+		service.users_over_time[time.Now().Format(time.Stamp)] = total_users
+		service.total_roles = roles
+		service.total_users = total_users
+		service.mu.Unlock()
 
-		collection := svc.GetBucket("metrics")
-		for timestamp, users := range svc.users_over_time {
+		collection := service.storage.ConnectOrCreateBucket(service.metricsDB)
+		for timestamp, users := range service.users_over_time {
 			go func(ts string, us int64) {
 				if err := collection.Store(ts, us); err != nil {
 					logs.Err("failed to store user metrics: %v", err)
