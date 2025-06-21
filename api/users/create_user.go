@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/api/auth"
-	"github.com/danmuck/dps_http/api/types"
+	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/lib/logs"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -50,7 +51,7 @@ func CreateUser() gin.HandlerFunc {
 		logs.Dev("token: %s", t)
 
 		logs.Log("[DEV]> Hashed password: %s", hash)
-		user := types.User{
+		user := api.User{
 			ID:           primitive.NewObjectID(),
 			Username:     username,
 			Email:        email,

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/lib/logs"
-	"github.com/danmuck/dps_http/storage"
+	"github.com/danmuck/dps_http/lib/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

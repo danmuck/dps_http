@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/danmuck/dps_http/api/types"
+	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/lib/logs"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -53,7 +54,7 @@ func RegisterHandler() gin.HandlerFunc {
 			logs.Log("assigning admin role to user: %s", in.Username)
 			roles = append(roles, "admin")
 		}
-		user := types.User{
+		user := api.User{
 			ID:           primitive.NewObjectID(),
 			Username:     in.Username,
 			Email:        in.Email,

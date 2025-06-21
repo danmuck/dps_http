@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"net/http"
-
 	"slices"
 
 	"github.com/danmuck/dps_http/lib/logs"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 )

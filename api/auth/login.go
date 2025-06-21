@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/danmuck/dps_http/api/types"
+	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/lib/logs"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -35,7 +36,7 @@ func LoginHandler() gin.HandlerFunc {
 			return
 		}
 		logs.Log("user found: %s", in.Username)
-		var user types.User
+		var user api.User
 		data, _ := bson.Marshal(raw)
 		if err := bson.Unmarshal(data, &user); err != nil {
 			logs.Log("unmarshal error: %v", err)

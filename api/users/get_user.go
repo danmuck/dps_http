@@ -3,8 +3,9 @@ package users
 import (
 	"net/http"
 
-	"github.com/danmuck/dps_http/api/types"
+	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/lib/logs"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -24,7 +25,7 @@ func GetUser() gin.HandlerFunc {
 		logs.Log("raw user map: %v", raw["username"])
 
 		rawBSON, _ := bson.Marshal(raw)
-		var user types.User
+		var user api.User
 		if err := bson.Unmarshal(rawBSON, &user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse user"})
 			return
