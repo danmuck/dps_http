@@ -51,7 +51,7 @@ func NewAuthService(endpoint string) *AuthService {
 	}
 	m, err := mongo.NewMongoStore(cfg.DB.MongoURI, cfg.DB.Name)
 	if err != nil {
-		logs.Log("failed to create mongo store: %v", err)
+		logs.Err("failed to create mongo store: %v", err)
 		return nil
 	}
 	version := "v1"
@@ -89,8 +89,5 @@ func HashPassword(password string) (string, error) {
 
 func VerifyPassword(hashed, password string) bool {
 	check := bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password))
-	if check != nil {
-		return false
-	}
-	return true
+	return check == nil
 }

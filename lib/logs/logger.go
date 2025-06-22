@@ -17,7 +17,7 @@ const (
 	DEBUG           // Verbosity Development
 )
 
-const MODE = DEBUG  // Set the logging mode, e.g., DEV, ERROR, WARN, DEBUG
+const MODE = WARN   // Set the logging mode, e.g., DEV, ERROR, WARN, DEBUG
 const TRACE = false // Enable/disable stack trace logging
 
 func ColorTest() {

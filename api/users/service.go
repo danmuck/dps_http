@@ -36,10 +36,8 @@ func (svc *UserService) Up(rg *gin.RouterGroup) {
 		{
 			uog.GET("/r/:username", GetUser()) // Get user by ID
 			uog.PUT("/:id", UpdateUser())      // Update user by ID
-			uog.DELETE("/:id", DeleteUser())   // Delete user by ID
+			// uog.DELETE("/:id", DeleteUser())   // Delete user by ID
 		}
-		// TODO: dev route should be moved and locked away
-		ug.POST("/:id", middleware.AuthorizeByRoles("admin"), CreateUser())
 	}
 }
 

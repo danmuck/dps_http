@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/danmuck/dps_http/api/admin"
 	"github.com/danmuck/dps_http/api/auth"
 	"github.com/danmuck/dps_http/api/metrics"
 	"github.com/danmuck/dps_http/api/users"
@@ -56,12 +57,17 @@ func (ws *WebServer) registerServices() {
 	ws.services["auth"] = auth.NewAuthService("auth")
 	ws.services["users"] = users.NewUserService("users")
 	ws.services["metrics"] = metrics.NewUserMetricsService("metrics")
+	ws.services["admin"] = admin.NewAdminService("admin")
 
 	v1 := root.Group(api.VERSION)
 	var buf []api.Service = make([]api.Service, 0)
-	for _, svc := range ws.services {
+	for key, svc := range ws.services {
 		if svc.DependsOn() != nil {
 			buf = append(buf, svc)
+			continue
+		}
+		if key == "admin" {
+			svc.Up(v1)
 			continue
 		}
 		svc.Up(v1)
@@ -95,5 +101,10 @@ func main() {
 	r := server.router
 
 	server.registerRoutes()
+	defer func() {
+		for _, svc := range server.services {
+			svc.Down()
+		}
+	}()
 	r.Run(":" + cfg.Port)
 }

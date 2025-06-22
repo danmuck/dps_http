@@ -51,7 +51,7 @@ func RegisterHandler() gin.HandlerFunc {
 
 		roles := []string{"user"}
 		if in.Username == "admin" || in.Username == "dirtpig" {
-			logs.Log("assigning admin role to user: %s", in.Username)
+			logs.Dev("assigning admin role to user: %s", in.Username)
 			roles = append(roles, "admin")
 		}
 		user := api.User{
@@ -65,7 +65,7 @@ func RegisterHandler() gin.HandlerFunc {
 			CreatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 			UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 		}
-		logs.Log("creating user: %s", user.Username)
+		logs.Debug("creating user: %s", user.Username)
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"username": user.Username,
@@ -73,13 +73,13 @@ func RegisterHandler() gin.HandlerFunc {
 			"roles":    user.Roles,
 			"exp":      time.Now().Add(24 * time.Hour).Unix(),
 		})
-		logs.Log("signing token for user: %s", user.Username)
+		logs.Debug("signing token for user: %s", user.Username)
 		tokenString, err := token.SignedString([]byte(service.secret))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign token"})
 			return
 		}
-		logs.Log("token signed successfully for user: %s \n  %v", user.Username, tokenString)
+		logs.Debug("token signed successfully for user: %s \n  %v", user.Username, tokenString)
 
 		if err := service.storage.Store(service.userDB, user.ID.Hex(), user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
