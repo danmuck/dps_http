@@ -42,10 +42,11 @@ func (svc *AdminService) Up(root *gin.RouterGroup) {
 
 	ug := rg.Group("/users")
 	ug.POST("/:id", CreateUser())
+	ug.DELETE("/:id", DeleteUser()) // Delete user by ID
+
 	admin := rg.Group("/admin")
 	admin.POST("/gcx", CreateUsersX())
-
-	ug.DELETE("/:id", DeleteUser()) // Delete user by ID
+	admin.POST("/dcx", DeleteUsersX()) // Delete user by ID
 
 	logs.Dev("[AdminService] up at %s and %s", root.BasePath(), ug.BasePath())
 }
