@@ -3,6 +3,7 @@ package v1
 import (
 	"fmt"
 
+	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/configs"
 	"github.com/danmuck/dps_http/lib/logs"
 	"github.com/danmuck/dps_http/lib/middleware"
@@ -11,10 +12,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TemplateService implements the service interface
-// route handlers are defined in their corresponding files
-// (note: there are none for this template service)
-// //
+/*
+ *
+ * TemplateService implements the service interface
+ * route handlers are defined in their corresponding files
+ * (note: there are none for this template service)
+ *
+ */
+
 var service *TemplateService
 
 type TemplateService struct {
@@ -26,10 +31,15 @@ type TemplateService struct {
 	storage *mongo.MongoClient
 }
 
-// assign routes for the service and initialize any resources
-// routes are structured `api/v1/<service_name>/<your_endpoints>`
+/*
+ *
+ * assign routes for the service and initialize any resources
+ * routes are structured `api/v1/<service_name>/<your_endpoints>`
+ *
+ */
+
 func (svc *TemplateService) Up(rg *gin.RouterGroup) {
-	svc_g := rg.Group(Path(service.endpoint))
+	svc_g := rg.Group(api.Path(service.endpoint))
 	svc_g.Use(middleware.JWTMiddleware()) // Apply middleware from lib/ if needed
 	// svc_g.GET("/", handlerFunc())
 

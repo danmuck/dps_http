@@ -1,13 +1,19 @@
 package admin
 
 import (
+	"crypto/sha512"
 	"fmt"
 	"math/rand"
+	"time"
 
+	"github.com/danmuck/dps_http/api/auth"
+	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/configs"
 	"github.com/danmuck/dps_http/lib/logs"
 	"github.com/danmuck/dps_http/lib/middleware"
 	"github.com/danmuck/dps_http/lib/storage/mongo"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/gin-gonic/gin"
 )
@@ -91,4 +97,50 @@ func dummyString(length int, postfix string) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return fmt.Sprintf("%s%s", string(b), postfix)
+}
+
+func createDummyUser(username string) error {
+	email := dummyString(8, "@dirtranch.io")
+	password := dummyString(4, "crypt")
+	if username == "" || username == "undefined" {
+		logs.Log("[DEV]> No username provided, generating a random one")
+		username = dummyString(4, "dps")
+	}
+
+	if _, found := service.storage.Lookup(service.userDB, bson.M{"username": username}); found {
+		logs.Log("[DEV]> User %s already exists, generating a new one", username)
+		username = dummyString(4, "dps")
+	}
+
+	logs.Log("[DEV]> Creating user: %s", username)
+
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		logs.Log("[DEV]> Hashing error: %v", err)
+		return err
+	}
+	t := sha512.Sum512([]byte(username))
+	logs.Dev("token: %s", t)
+
+	logs.Log("[DEV]> Hashed password: %s", hash)
+	user := api.User{
+		ID:           primitive.NewObjectID(),
+		Username:     username,
+		Email:        email,
+		PasswordHash: hash,
+		Roles:        []string{"dummy"},
+		Token:        "NEW_USER_TOKEN",
+		Bio:          "the dev. the creator.. ... ..i'm special",
+		AvatarURL:    "banner.svg",
+		CreatedAt:    primitive.NewDateTimeFromTime(time.Now()),
+		UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
+	}
+
+	logs.Log("[DEV]> User object: %s", user.String())
+
+	// Store the user in the database
+	if err := service.storage.Store(service.userDB, user.ID.Hex(), user); err != nil {
+		return err
+	}
+	return nil
 }
