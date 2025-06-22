@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/danmuck/dps_http/storage"
+	"github.com/danmuck/dps_http/lib/storage"
 )
 
 // get - Transaction and expenses by year, month, day

@@ -13,10 +13,10 @@ import (
 
 // forbidden access to user data
 // * not used for now
-var forbidden []string = []string{
-	"password_hash", "token", "created_at", "updated_at",
-	"bio", "avatar_url", "email",
-}
+// var forbidden []string = []string{
+// 	"password_hash", "token", "created_at", "updated_at",
+// 	"bio", "avatar_url", "email",
+// }
 
 // allowed access to user data
 // checked explicitly against this slice
@@ -41,12 +41,12 @@ func CleanAndPrefix(filter any) bson.M {
 	for key, val := range fm {
 		if key == "key" {
 			// special case for "key" to avoid prefixing
-			logs.Log("allowing key %q without prefix", key)
+			logs.Debug("allowing key %q without prefix", key)
 			out[key] = val
 			continue
 		}
 		if slices.Contains(allowed, key) {
-			logs.Log("allowing %q → %q", key, Prefix(key))
+			logs.Debug("allowing %q → %q", key, Prefix(key))
 			out[Prefix(key)] = val
 		}
 	}

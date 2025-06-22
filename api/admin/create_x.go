@@ -10,33 +10,47 @@ import (
 )
 
 func CreateUsersX() gin.HandlerFunc {
-	logs.Init("[DEV]> CreateUser() initializing with storage: %s", service.storage.Name())
 	return func(c *gin.Context) {
 
 		X := c.PostForm("num_users")
 		N, err := strconv.Atoi(X)
+
 		if err != nil {
-			logs.Log("[DEV]> CreateUser: received invalid number of users: %s", X)
+			logs.Err("[DEV]> CreateUser: received invalid number of users: %s", X)
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status": "error",
 				"error":  "invalid number of users",
 			})
 			return
 		}
-
-		logs.Log("[DEV]> CreateUser: received username: %s", X)
-		for range N {
-			username := dummyString(8, "dps")
-			if _, found := service.storage.Lookup(service.userDB, bson.M{"username": username}); found {
-				logs.Log("[DEV]> User %s already exists, generating a new one", username)
-				username = dummyString(8, "dps")
-			}
-
-			if err := createDummyUser(username); err != nil {
-				logs.Dev("[DEV]> CreateUser: error: %s", err)
-				continue
-			}
+		err = CreateXUsers(N)
+		if err != nil {
+			logs.Err("[DEV]> CreateUser: failed to create %d dummy users: %v", N, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "failed to create users",
+			})
+			return
 		}
 		c.Redirect(http.StatusFound, "/admin/new")
 	}
+}
+
+func CreateXUsers(x int) error {
+	logs.Info("[DEV]> Creating ++(%d) dummy users", x)
+	for range x {
+		username := dummyString(8, "dps")
+		if _, found := service.storage.Lookup(service.userDB, bson.M{"username": username}); found {
+			logs.Log("[DEV]> User %s already exists, generating a new one", username)
+			username = dummyString(8, "dps")
+		}
+
+		if err := createDummyUser(username); err != nil {
+			logs.Warn("[DEV]> CreateUser: error: %s, user not created", err)
+			continue
+		}
+	}
+	logs.Info("[DEV]> Created ++(%d) dummy users", x)
+
+	return nil
 }

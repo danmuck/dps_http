@@ -69,12 +69,12 @@ func (b *mongoBucket) Store(key string, value any) error {
 // @TODO kinda bypassing this currently
 func (b *mongoBucket) Retrieve(key string) (any, error) {
 	logs.Dev("Retrieve not implemented for MongoBucket")
-	return nil, fmt.Errorf("Retrieve not applicable for a bucket")
+	return nil, fmt.Errorf("not implemented")
 }
 
 // Delete deletes the key-value pair associated with the given key from the bucket
 func (b *mongoBucket) Delete(key string) error {
-	logs.Dev("Delete [%s] key=%q", b.Name(), key)
+	logs.Debug("Delete [%s] key=%q", b.Name(), key)
 	_, err := b.DeleteOne(context.Background(), bson.M{"key": key})
 	return err
 }
@@ -112,7 +112,7 @@ func (b *mongoBucket) Patch(key string, updates map[string]any) error {
 	for field, val := range updates {
 		patch[storage.Prefix(field)] = val
 	}
-	logs.Log("patch bson : %v", patch)
+	logs.Debug("patch bson : %v", patch)
 
 	result, err := b.UpdateOne(
 		context.Background(),
@@ -127,7 +127,7 @@ func (b *mongoBucket) Patch(key string, updates map[string]any) error {
 		logs.Err("no document matched for key %q in bucket %q", key, b.Name())
 		return fmt.Errorf("no document with key=%q in bucket=%q", key, b.Name())
 	}
-	logs.Log("[%q] patched %d documents for key %q",
+	logs.Debug("[%q] patched %d documents for key %q",
 		b.Name(), result.ModifiedCount, key)
 	return nil
 }
@@ -149,7 +149,7 @@ func (b *mongoBucket) Lookup(filter any) (map[string]any, bool) {
 	err := b.FindOne(context.Background(), mongoFilter).Decode(&rawDoc)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			logs.Warn("no document found for filter %v", mongoFilter)
+			logs.Debug("soft warning: no document found for filter %v", mongoFilter)
 			return nil, false
 		}
 		logs.Err("Lookup error: %v", err)
@@ -162,7 +162,7 @@ func (b *mongoBucket) Lookup(filter any) (map[string]any, bool) {
 		logs.Err("unexpected document shape %T", rawDoc["value"])
 		return nil, false
 	}
-	logs.Log("found user map: %v", userMap["username"])
+	logs.Debug("found user map: %v", userMap["username"])
 	return userMap, true
 }
 

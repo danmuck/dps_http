@@ -37,9 +37,9 @@ func JWTMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
-		logs.Log("cookie token: ...%s", tokenString[len(tokenString)-20:])
+		logs.Debug("cookie token: ...%s", tokenString[len(tokenString)-20:])
 		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-			logs.Err("parsing token with claims: %v", token.Claims)
+			logs.Debug("parsing token with claims: %v", token.Claims)
 			return JWT_SECRET, nil
 		})
 		if err != nil || !token.Valid {
@@ -47,9 +47,9 @@ func JWTMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		logs.Log("token is valid, claims: [%v]", token.Claims)
+		logs.Debug("token is valid, claims: [%v]", token.Claims)
 		claims := token.Claims.(*Claims)
-		logs.Dev("SUBJECT: %s USER: %s", claims.Subject, claims.Username)
+		logs.Debug("SUBJECT: %s USER: %s", claims.Subject, claims.Username)
 
 		c.Set("username", claims.Username)
 		c.Set("user_id", claims.Subject)
@@ -86,20 +86,20 @@ func AuthorizeResourceAccess() gin.HandlerFunc {
 		raw, _ := c.Get("roles")
 		have, ok := raw.([]string)
 		if !ok {
-			logs.Dev("AuthorizeResourceAccess: user is admin")
-			// c.AbortWithError(401, errors.New("invalid roles on ctx, try logging in and out"))
+			logs.Err("roles on ctx are not a string slice, aborting")
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "roles invalid, try logging in and out"})
 			return
 		}
-		logs.Dev("Authorize: user: %s owner: %s owner_id: %s", username, owner, owner_id)
+
 		// @NOTE -- not sure how secure this is, need to clean it up, i think there is a lot of unnecessary
 		// variables flying around in its current state
 		if (claims.Username != owner && claims.Subject != owner_id) && !CheckForRole("admin", have...) {
-			logs.Dev("cuser: %s owner: %s csub: %s owner_id%s", claims.Username, owner, claims.Subject, owner_id)
+			// logs.Dev("cuser: %s owner: %s csub: %s owner_id%s", claims.Username, owner, claims.Subject, owner_id)
+			logs.Err("Not authorized: user: %s owner: %s owner_id: %s", username, owner, owner_id)
 			c.AbortWithStatusJSON(403, gin.H{"auth": "not owner, not authorized"})
 			return
 		}
-		logs.Dev("Authorized: user: %s owner: %s owner_id: %s", username, owner, owner_id)
+		logs.Debug("Authorized: user: %s owner: %s owner_id: %s", username, owner, owner_id)
 		// otherwise store it in context
 		c.Set("username", owner)
 		c.Set("user_id", claims.Subject)

@@ -71,11 +71,11 @@ func (ms *MongoClient) ConnectOrCreateBucket(bucket string) storage.Bucket {
 	logs.Init("ConnectOrCreateBucket [%s]", bucket)
 	collection, exists := ms.buckets[bucket]
 	if !exists || collection == nil {
-		logs.Log("Create [%s]", bucket)
+		logs.Info("Create [%s]", bucket)
 		collection = newMongoBucket(ms.db, bucket)
 		ms.buckets[bucket] = collection
 	}
-	logs.Log("Connect [%s]", bucket)
+	logs.Debug("Connect [%s]", bucket)
 	return collection
 }
 
@@ -84,7 +84,7 @@ func (ms *MongoClient) Store(bucket string, key string, value any) error {
 	logs.Init("Store [%q] : { %q : %q }", bucket, key, value)
 	collection := ms.ConnectOrCreateBucket(bucket)
 	err := collection.Store(key, value)
-	logs.Log("Store result: %v (success if <nil>)", err)
+	logs.Debug("Store result: %v (success if <nil>)", err)
 	return err
 }
 

@@ -101,5 +101,10 @@ func main() {
 	r := server.router
 
 	server.registerRoutes()
+	defer func() {
+		for _, svc := range server.services {
+			svc.Down()
+		}
+	}()
 	r.Run(":" + cfg.Port)
 }

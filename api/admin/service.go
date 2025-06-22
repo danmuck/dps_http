@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"crypto/sha512"
 	"fmt"
 	"math/rand"
 	"time"
@@ -31,6 +30,8 @@ type AdminService struct {
 	// service specific structures
 	userDB  string
 	storage *mongo.MongoClient
+
+	datagen chan any
 }
 
 // assign routes for the service and initialize any resources
@@ -48,13 +49,14 @@ func (svc *AdminService) Up(root *gin.RouterGroup) {
 	admin.POST("/gcx", CreateUsersX())
 	admin.POST("/dcx", DeleteUsersX()) // Delete user by ID
 
-	logs.Dev("[AdminService] up at %s and %s", root.BasePath(), ug.BasePath())
+	logs.Info("[AdminService] up at %s and %s", root.BasePath(), ug.BasePath())
 }
 
 // bring the service down gracefully and release all resources
 func (svc *AdminService) Down() error {
-	logs.Dev("auth service Down() not yet implemented")
-	return fmt.Errorf("not yet implemented")
+	logs.Info("auth service Down() is partially implemented")
+	svc.datagen <- nil
+	return fmt.Errorf("error not yet implemented")
 }
 
 // returns the API version this depends on
@@ -70,7 +72,6 @@ func (svc *AdminService) DependsOn() []string {
 // returns a pointer to the server instance
 // expects its state to be initialized and ready for Up()
 func NewAdminService(endpoint string) *AdminService {
-	logs.Dev("[NewAdminService]")
 	cfg, err := configs.LoadConfig()
 	if err != nil {
 		logs.Fatal(err.Error())
@@ -86,6 +87,7 @@ func NewAdminService(endpoint string) *AdminService {
 		version:  version,
 		userDB:   "users" + version,
 		storage:  m,
+		datagen:  newDataGenerator(),
 	}
 	return service
 }
@@ -104,26 +106,26 @@ func createDummyUser(username string) error {
 	email := dummyString(8, "@dirtranch.io")
 	password := dummyString(4, "crypt")
 	if username == "" || username == "undefined" {
-		logs.Log("[DEV]> No username provided, generating a random one")
+		// logs.Log("[DEV]> No username provided, generating a random one")
 		username = dummyString(4, "dps")
 	}
 
 	if _, found := service.storage.Lookup(service.userDB, bson.M{"username": username}); found {
-		logs.Log("[DEV]> User %s already exists, generating a new one", username)
+		logs.Warn("[DEV]> User %s already exists, generating a new one", username)
 		username = dummyString(4, "dps")
 	}
 
-	logs.Log("[DEV]> Creating user: %s", username)
+	// logs.Log("[DEV]> Creating user: %s", username)
 
 	hash, err := auth.HashPassword(password)
 	if err != nil {
-		logs.Log("[DEV]> Hashing error: %v", err)
+		logs.Err("[DEV]> Hashing error: %v", err)
 		return err
 	}
-	t := sha512.Sum512([]byte(username))
-	logs.Dev("token: %s", t)
+	// t := sha512.Sum512([]byte(username))
+	// logs.Dev("token: %s", t)
 
-	logs.Log("[DEV]> Hashed password: %s", hash)
+	// logs.Log("[DEV]> Hashed password: %s", hash)
 	user := api.User{
 		ID:           primitive.NewObjectID(),
 		Username:     username,
@@ -137,7 +139,7 @@ func createDummyUser(username string) error {
 		UpdatedAt:    primitive.NewDateTimeFromTime(time.Now()),
 	}
 
-	logs.Log("[DEV]> User object: %s", user.String())
+	logs.Debug("[DEV]> User object: %s", user.String())
 
 	// Store the user in the database
 	if err := service.storage.Store(service.userDB, user.ID.Hex(), user); err != nil {
