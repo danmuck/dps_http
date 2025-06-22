@@ -139,7 +139,7 @@ func (svc *UserMetricsService) start() {
 			logs.Debug("sanity check processing %d/%d { %s : %d }", idx, len(users_over_time), timestamp, count)
 		}
 	}
-	total_roles, err := svc.UserCountByRole()
+	err = svc.UpdateRoleCounts()
 	if err != nil {
 		logs.Err("failed to retrieve user roles: %v", err)
 		return
@@ -148,16 +148,34 @@ func (svc *UserMetricsService) start() {
 	svc.running = true
 	svc.users_over_time = total_over_time
 	svc.total_users = total_users
-	svc.total_roles = total_roles
 	svc.mu.Unlock()
 
 	logs.Info("initialized with %d users, roles: %v, users_over_time points: %v",
-		total_users, total_roles, len(total_over_time))
+		total_users, svc.total_roles, len(total_over_time))
 
 	go backgroundService()
 }
 
-func (svc *UserMetricsService) UserCountByRole() (map[string]int64, error) {
+func (svc *UserMetricsService) AddGrowthData() {
+	service.mu.Lock()
+	service.users_over_time[time.Now().Format(time.Stamp)] = svc.total_users
+	service.mu.Unlock()
+}
+
+func (svc *UserMetricsService) UpdateTotalUsers() error {
+	logs.Init("UserCount")
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	total_users, err := service.storage.ConnectOrCreateBucket(service.userDB).Count()
+	if err != nil {
+		logs.Err("failed to connect to storage: %v", err)
+		return err
+	}
+	svc.total_users = total_users
+	return nil
+}
+
+func (svc *UserMetricsService) UpdateRoleCounts() error {
 	logs.Init("UserCountByRole")
 	roleCounts := make(map[string]int64)
 
@@ -165,10 +183,13 @@ func (svc *UserMetricsService) UserCountByRole() (map[string]int64, error) {
 	users, err := store.ListKeys()
 	if err != nil {
 		logs.Err("failed to list users: %v", err)
-		return nil, fmt.Errorf("failed to list users: %w", err)
+		return fmt.Errorf("failed to list users: %w", err)
 	}
 	// count each role across all users
-	for _, raw := range users {
+	for idx, raw := range users {
+		if idx%250 == 1 {
+			logs.Debug("sanity check processing point %d/%d", idx, len(svc.users_over_time))
+		}
 		user, ok := raw.(map[string]any)
 		if !ok {
 			logs.Warn("skipping malformed user record: %v", raw)
@@ -184,7 +205,6 @@ func (svc *UserMetricsService) UserCountByRole() (map[string]int64, error) {
 			logs.Warn("skipping user with non-list roles: %v %T", rolesRaw, roles)
 			continue
 		}
-
 		for _, r := range roles {
 			roleStr, ok := r.(string)
 			if ok {
@@ -192,8 +212,24 @@ func (svc *UserMetricsService) UserCountByRole() (map[string]int64, error) {
 			}
 		}
 	}
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	svc.total_roles = roleCounts
 
-	return roleCounts, nil
+	return nil
+}
+func (svc *UserMetricsService) WriteMetrics() {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	collection := service.storage.ConnectOrCreateBucket(service.metricsDB)
+	for timestamp, users := range service.users_over_time {
+		go func(ts string, us int64) {
+			if err := collection.Store(ts, us); err != nil {
+				logs.Err("failed to store user metrics: %v", err)
+				return
+			}
+		}(timestamp, users)
+	}
 }
 
 //	Private handler for service lifecycle management
@@ -210,32 +246,20 @@ func backgroundService() {
 
 	for service.running {
 		logs.Log("processing metrics...")
-		total_users, err := service.storage.ConnectOrCreateBucket(service.userDB).Count()
+		err := service.UpdateTotalUsers()
 		if err != nil {
 			logs.Err("failed to retrieve user count: %v", err)
 			return
 		}
 
-		roles, err := service.UserCountByRole()
+		err = service.UpdateRoleCounts()
 		if err != nil {
 			logs.Err("failed to retrieve user roles: %v", err)
 			return
 		}
-		service.mu.Lock()
-		service.users_over_time[time.Now().Format(time.Stamp)] = total_users
-		service.total_roles = roles
-		service.total_users = total_users
-		service.mu.Unlock()
 
-		collection := service.storage.ConnectOrCreateBucket(service.metricsDB)
-		for timestamp, users := range service.users_over_time {
-			go func(ts string, us int64) {
-				if err := collection.Store(ts, us); err != nil {
-					logs.Err("failed to store user metrics: %v", err)
-					return
-				}
-			}(timestamp, users)
-		}
+		service.AddGrowthData()
+		service.WriteMetrics()
 
 		time.Sleep(configs.METRICS_delay) // wait for the next cycle
 	}
