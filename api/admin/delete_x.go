@@ -83,9 +83,10 @@ func DeleteUsersX() gin.HandlerFunc {
 			deleted++
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"deleted": deleted,
-		})
+		// c.JSON(http.StatusOK, gin.H{
+		// 	"status":  "ok",
+		// 	"deleted": deleted,
+		// })
+		c.Redirect(http.StatusFound, "/admin/new")
 	}
 }
