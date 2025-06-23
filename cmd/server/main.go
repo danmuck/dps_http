@@ -28,6 +28,10 @@ func NewWebServer(cfg *configs.Config) *WebServer {
 	r := gin.Default()
 	r.SetTrustedProxies([]string{"127.0.0.1", cfg.Domain})
 	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		logs.Dev("Incoming request origin: %s", c.Request.Header.Get("Origin"))
+		c.Next()
+	})
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000", cfg.Domain},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

@@ -24,8 +24,8 @@ type Auth struct {
 }
 
 var (
-	METRICS_delay           = 15 * time.Second
-	DATAGEN_delay           = 15 * time.Second
+	METRICS_delay           = 12 * time.Second
+	DATAGEN_delay           = 36 * time.Second
 	LOGGER_filter           = []string{"api:users"}
 	LOGGER_enable_timestamp = false
 	LOGGER_service_map      = map[string]string{
@@ -57,9 +57,17 @@ func LoadConfig() (*Config, error) {
 
 	return cfg, err
 }
+
 func (cfg *Config) String() string {
-	return fmt.Sprintf("Domain: %s, Port: %s, DB: %s, Auth: %s", cfg.Domain, cfg.Port, cfg.DB, cfg.Auth)
+	return fmt.Sprintf(`
+	Config:
+		Domain: %s, 
+		Port: %s, 
+		DB: %s, 
+		Auth: %s`,
+		cfg.Domain, cfg.Port, cfg.DB, cfg.Auth)
 }
+
 func (cfg *Config) Validate() error {
 	// @TODO -- needs to issue a help like command
 	if cfg.Domain == "" {

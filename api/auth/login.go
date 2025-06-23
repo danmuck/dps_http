@@ -68,8 +68,8 @@ func LoginHandler() gin.HandlerFunc {
 		logs.Log("token signed successfully for user: %s \n  ...%v with hash: %s",
 			user.Username, signed[len(signed)-20:], service.secret)
 
-		c.SetCookie("jwt", signed, 3600*24, "/", "localhost", true, true)
-		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", true, false)
+		c.SetCookie("jwt", signed, 3600*24, "/", "localhost", false, true)
+		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", false, false)
 		// c.SetCookie("sub", user.ID.Hex(), 3600*24, "/", "localhost", false, false)
 
 		c.JSON(http.StatusOK, gin.H{

@@ -20,7 +20,7 @@ func newDataGenerator() chan any {
 }
 
 func clamp(x int) int {
-	min, max := 5, 669
+	min, max := 25, 669
 
 	if x < min {
 		return min
@@ -41,32 +41,26 @@ func (dg *DataGenerator) start() {
 				return
 			default:
 				time.Sleep(configs.DATAGEN_delay)
-				flip := rand.Intn(69)
-				nd := rand.Intn(75) + 25
-				na := rand.Intn(75) + 25
-				d := clamp(nd)
-				c := clamp(na)
-				n := clamp(nd + na)
+				flip := rand.Intn(18)
+				n := rand.Intn(750) + 250
+				n = clamp(n)
+
 				switch flip {
 				case 0:
 					go CreateXUsers(n)
 				case 1:
 					go DeleteXDummies(n)
 				case 2:
-					go CreateXUsers(c + 75)
-					go DeleteXDummies(d + 75)
+					go CreateXUsers(n + 750)
 				case 3:
-					go CreateXUsers(c + 75)
-					go CreateXUsers(c + 75)
+					go DeleteXDummies(n + 550)
 				case 4:
-					go DeleteXDummies(d + 75)
-					go DeleteXDummies(d + 75)
+					go CreateXUsers(n + 2000)
 				case 5:
-					go CreateXUsers(c + 500)
-					go DeleteXDummies(d + 500)
+					go DeleteXDummies(n + 1500)
 				default:
-					go CreateXUsers(c + 5)
-					go DeleteXDummies(d + 5)
+					go CreateXUsers(max(n-500, 0))
+					go DeleteXDummies(max(n-350, 0))
 				}
 			}
 		}

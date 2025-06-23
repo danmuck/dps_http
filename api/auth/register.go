@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	api "github.com/danmuck/dps_http/api/v1"
@@ -50,7 +51,7 @@ func RegisterHandler() gin.HandlerFunc {
 		}
 
 		roles := []string{"user"}
-		if in.Username == "admin" || in.Username == "dirtpig" {
+		if in.Username == "admin" || in.Username == "dirtpig" || in.Username == "danmuck" {
 			logs.Dev("assigning admin role to user: %s", in.Username)
 			roles = append(roles, "admin")
 		}
@@ -86,8 +87,9 @@ func RegisterHandler() gin.HandlerFunc {
 			return
 		}
 
-		c.SetCookie("jwt", tokenString, 3600*24, "/", "localhost", false, true) // not secure for localhost
-		c.SetCookie("username", user.Username, 3600*24, "/", "localhost", false, false)
+		host := strings.Split(c.Request.Host, ":")[0]                    // strips port
+		c.SetCookie("jwt", tokenString, 3600*24, "/", host, false, true) // not secure for localhost
+		c.SetCookie("username", user.Username, 3600*24, "/", host, false, false)
 		// c.SetCookie("sub", user.ID.Hex(), 3600*24, "/", "localhost", false, false)
 
 		c.JSON(http.StatusCreated, gin.H{

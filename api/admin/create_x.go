@@ -23,15 +23,23 @@ func CreateUsersX() gin.HandlerFunc {
 			})
 			return
 		}
-		err = CreateXUsers(N)
-		if err != nil {
-			logs.Err("[DEV]> CreateUser: failed to create %d dummy users: %v", N, err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "error",
-				"error":  "failed to create users",
-			})
-			return
-		}
+		go func() {
+			logs.Info("[DEV]> CreateUser: creating ++(%d) dummy users", N)
+			if err := CreateXUsers(N); err != nil {
+				logs.Err("[DEV]> CreateUser: failed to create %d dummy users: %v", N, err)
+			} else {
+				logs.Info("[DEV]> CreateUser: successfully created ++(%d) dummy users", N)
+			}
+		}()
+		// err = CreateXUsers(N)
+		// if err != nil {
+		// 	logs.Err("[DEV]> CreateUser: failed to create %d dummy users: %v", N, err)
+		// 	c.JSON(http.StatusInternalServerError, gin.H{
+		// 		"status": "error",
+		// 		"error":  "failed to create users",
+		// 	})
+		// 	return
+		// }
 		c.Redirect(http.StatusFound, "/admin/new")
 	}
 }
@@ -50,7 +58,7 @@ func CreateXUsers(x int) error {
 			continue
 		}
 	}
-	logs.Info("[DEV]> Created ++(%d) dummy users", x)
+	logs.Warn("[DEV]> Created ++(%d) dummy users", x)
 
 	return nil
 }

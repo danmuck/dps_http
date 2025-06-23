@@ -12,8 +12,8 @@ import (
 func LogoutHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logs.Log("LogoutHandler() clearing JWT cookie")
-		c.SetCookie("jwt", "", -1, "/", "", true, true)
-		c.SetCookie("username", "", -1, "/", "", true, false)
+		c.SetCookie("jwt", "", -1, "/", "", false, true)
+		c.SetCookie("username", "", -1, "/", "", false, false)
 		c.JSON(http.StatusOK, gin.H{"status": "logged out"})
 	}
 }

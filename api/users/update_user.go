@@ -2,6 +2,7 @@ package users
 
 import (
 	"net/http"
+	"slices"
 
 	"github.com/danmuck/dps_http/lib/logs"
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,7 @@ func UpdateUser() gin.HandlerFunc {
 			Email     string   `json:"email,omitempty"`
 			Bio       string   `json:"bio,omitempty"`
 			AvatarURL string   `json:"avatarURL,omitempty"`
-			Roles     []string `json:"roles,omitempty"` // if you want to allow role changes
+			Roles     []string `json:"roles,omitempty"`
 		}
 		if err := c.ShouldBindJSON(&patch); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
@@ -40,6 +41,12 @@ func UpdateUser() gin.HandlerFunc {
 		}
 		if len(patch.Roles) > 0 {
 			logs.Log("UpdateUser: patching roles to %v", patch.Roles)
+			if slices.Contains(patch.Roles, "admin") {
+				patch.Roles = slices.DeleteFunc(patch.Roles, func(role string) bool {
+					return role == "admin" || role == "dev"
+				})
+				logs.Log("UpdateUser: admin role detected, ensuring user is not already an admin")
+			}
 			updates["roles"] = patch.Roles
 		}
 		if len(updates) == 0 {

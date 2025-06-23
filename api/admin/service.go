@@ -39,7 +39,7 @@ type AdminService struct {
 func (svc *AdminService) Up(root *gin.RouterGroup) {
 
 	rg := root.Group("/")
-	rg.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("admin"))
+	rg.Use(middleware.JWTMiddleware(), middleware.AuthorizeByRoles("admin"), middleware.RateLimitMiddleware())
 
 	ug := rg.Group("/users")
 	ug.POST("/:id", CreateUser())

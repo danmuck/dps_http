@@ -92,6 +92,6 @@ func DeleteXDummies(x int) error {
 
 		deleted++
 	}
-	logs.Info("[DEV]> Deleted --(%d) dummy users", deleted)
+	logs.Warn("[DEV]> Deleted --(%d) dummy users", deleted)
 	return nil
 }

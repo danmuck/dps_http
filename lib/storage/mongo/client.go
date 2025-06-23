@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/danmuck/dps_http/lib/logs"
@@ -18,6 +19,8 @@ type MongoClient struct {
 	client   *mongo.Client
 	db       *mongo.Database
 	buckets  map[string]*mongoBucket
+
+	mu sync.Mutex
 }
 
 func NewMongoStore(uri, dbName string) (*MongoClient, error) {
@@ -68,6 +71,9 @@ func (ms *MongoClient) Ping(ctx context.Context) error {
 // ConnectOrCreateBucket connects to an existing bucket or creates a new one if it doesn't exist.
 // It returns the collection for the specified bucket.
 func (ms *MongoClient) ConnectOrCreateBucket(bucket string) storage.Bucket {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
 	logs.Init("ConnectOrCreateBucket [%s]", bucket)
 	collection, exists := ms.buckets[bucket]
 	if !exists || collection == nil {

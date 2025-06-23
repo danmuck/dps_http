@@ -245,7 +245,6 @@ func backgroundService() {
 	defer service.Down()
 
 	for service.running {
-		logs.Log("processing metrics...")
 		err := service.UpdateTotalUsers()
 		if err != nil {
 			logs.Err("failed to retrieve user count: %v", err)
