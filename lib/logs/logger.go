@@ -12,9 +12,9 @@ import (
 
 const (
 	INACTIVE = iota // Verbosity Min
-	ERROR           // Verbosity Production
-	WARN            // Verbosity Testing
 	DEBUG           // Verbosity Development
+	WARN            // Verbosity Testing
+	ERROR           // Verbosity Production
 )
 
 const MODE = WARN   // Set the logging mode, e.g., DEV, ERROR, WARN, DEBUG
@@ -56,42 +56,40 @@ func Fatal(format string, v ...any) {
 }
 
 func Err(format string, v ...any) {
-	if MODE < ERROR {
+	if ERROR <= MODE {
 		return
 	}
 	Print(StyleRed, "[error]", format, v...)
 }
 
 func Warn(format string, v ...any) {
-	if MODE < WARN {
+	if WARN <= MODE {
 		return
 	}
 	Print(StyleYellow, "[warn]", format, v...)
 }
 
 func Info(format string, v ...any) {
-	if MODE < WARN {
+	if WARN <= MODE {
 		return
 	}
 	Print(StyleBlue, "[info]", format, v...)
 }
 
 func Debug(format string, v ...any) {
-	if MODE < DEBUG {
+	if DEBUG < MODE {
 		return
 	}
 	Print(StyleGreen, "[debug]", format, v...)
 }
 
 func Dev(format string, v ...any) {
-	if MODE < DEBUG {
-		return
-	}
+
 	Print(StyleMagenta, "[dev_]", format, v...)
 }
 
 func Init(format string, v ...any) {
-	if MODE < DEBUG {
+	if DEBUG <= MODE {
 		return
 	}
 	Print(StyleBlack, "[init]", format, v...)

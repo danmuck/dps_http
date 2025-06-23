@@ -96,7 +96,7 @@ func AuthorizeResourceAccess() gin.HandlerFunc {
 		if (claims.Username != owner && claims.Subject != owner_id) && !CheckForRole("admin", have...) {
 			// logs.Dev("cuser: %s owner: %s csub: %s owner_id%s", claims.Username, owner, claims.Subject, owner_id)
 			logs.Err("Not authorized: user: %s owner: %s owner_id: %s", username, owner, owner_id)
-			c.AbortWithStatusJSON(403, gin.H{"auth": "not owner, not authorized"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"auth": "not owner, not authorized"})
 			return
 		}
 		logs.Debug("Authorized: user: %s owner: %s owner_id: %s", username, owner, owner_id)

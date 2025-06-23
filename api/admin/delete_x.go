@@ -11,6 +11,7 @@ import (
 )
 
 func DeleteUsersX() gin.HandlerFunc {
+	logs.Dev("[DEV]> DeleteUsersX: handler initialized")
 	return func(c *gin.Context) {
 		X := c.PostForm("num_users")
 		N, err := strconv.Atoi(X)

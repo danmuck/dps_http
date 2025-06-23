@@ -42,7 +42,7 @@ func (dg *DataGenerator) start() {
 			default:
 				time.Sleep(configs.DATAGEN_delay)
 				flip := rand.Intn(18)
-				n := rand.Intn(750) + 250
+				n := rand.Intn(75) + 25
 				n = clamp(n)
 
 				switch flip {
@@ -51,16 +51,16 @@ func (dg *DataGenerator) start() {
 				case 1:
 					go DeleteXDummies(n)
 				case 2:
-					go CreateXUsers(n + 750)
+					go CreateXUsers(n + 75)
 				case 3:
-					go DeleteXDummies(n + 550)
+					go DeleteXDummies(n + 55)
 				case 4:
-					go CreateXUsers(n + 2000)
+					go CreateXUsers(n + 200)
 				case 5:
-					go DeleteXDummies(n + 1500)
+					go DeleteXDummies(n + 15)
 				default:
-					go CreateXUsers(max(n-500, 0))
-					go DeleteXDummies(max(n-350, 0))
+					go CreateXUsers(max(n-50, 0))
+					go DeleteXDummies(max(n-35, 0))
 				}
 			}
 		}
