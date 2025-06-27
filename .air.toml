@@ -1,5 +1,5 @@
 # Project root (where air will look for .go files)
-root = "."
+root = "../"
 
 # Where to write temporary binaries/logs
 tmp_dir = "tmp"
@@ -9,7 +9,9 @@ tmp_dir = "tmp"
 # ------------------------------------------------------------------------------
 [build]
 # Command to build your server
-cmd = "go build -o tmp/server cmd/server/main.go"
+# cmd = "go get github.com/danmuck/dps_lib@v0.0.9 && go mod tidy && go build -o tmp/server cmd/server_v2/main.go"
+cmd = "go mod tidy && go build -o tmp/server cmd/server_v2/main.go"
+
 # The binary that will be run
 bin = "tmp/server"
 # File extensions to watch for rebuilds
