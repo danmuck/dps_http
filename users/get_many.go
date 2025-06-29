@@ -44,11 +44,11 @@ func ListUsers(client *mongo_client.MongoClient) gin.HandlerFunc {
 			end = len(users)
 		}
 		// temp debugging
-		// func(users []*users.User) {
-		// 	for _, user := range users {
-		// 		logs.Debug("List of user: %+v", user)
-		// 	}
-		// }(users)
+		func(users []*User) {
+			for _, user := range users {
+				logs.Debug("List of user: %+v", user)
+			}
+		}(users)
 
 		c.JSON(http.StatusOK, gin.H{
 			"rows":       users[start:end],

@@ -11,6 +11,17 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+func SetAuthCookies(c *gin.Context, jwtToken string, csrfToken string, username string) {
+	host := strings.Split(c.Request.Host, ":")[0] // strips port
+	if jwtToken != "" {
+		c.SetCookie("jwt", jwtToken, 3600*24, "/", host, false, true)
+	}
+	if csrfToken != "" {
+		c.SetCookie("csrfToken", csrfToken, 3600*24, "/", host, false, false)
+	}
+	c.SetCookie("username", username, 3600*24, "/", host, false, false)
+}
+
 func GenAndSetAuthTokens(c *gin.Context, user *User, secret string) (string, string, error) {
 	jwtToken, err := GenAndSetJWT(c, user, secret)
 	if err != nil {
@@ -26,17 +37,6 @@ func GenAndSetAuthTokens(c *gin.Context, user *User, secret string) (string, str
 	SetAuthCookies(c, jwtToken, csrfToken, user.Username)
 
 	return jwtToken, csrfToken, nil
-}
-
-func SetAuthCookies(c *gin.Context, jwtToken string, csrfToken string, username string) {
-	host := strings.Split(c.Request.Host, ":")[0] // strips port
-	if jwtToken != "" {
-		c.SetCookie("jwt", jwtToken, 3600*24, "/", host, false, true)
-	}
-	if csrfToken != "" {
-		c.SetCookie("csrfToken", csrfToken, 3600*24, "/", host, false, false)
-	}
-	c.SetCookie("username", username, 3600*24, "/", host, false, false)
 }
 
 type CustomClaims struct {
