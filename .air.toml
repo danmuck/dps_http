@@ -1,5 +1,5 @@
 # Project root (where air will look for .go files)
-root = "."
+root = "../"
 
 # Where to write temporary binaries/logs
 tmp_dir = "tmp"

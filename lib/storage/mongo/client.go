@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/danmuck/dps_http/lib/logs"
 	"github.com/danmuck/dps_http/lib/storage"
+	logs "github.com/danmuck/dps_lib/logs"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

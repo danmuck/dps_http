@@ -3,7 +3,8 @@ package auth
 import (
 	"net/http"
 
-	"github.com/danmuck/dps_http/lib/logs"
+	logs "github.com/danmuck/dps_lib/logs"
+
 	"github.com/gin-gonic/gin"
 )
 

@@ -5,9 +5,9 @@ import (
 	"math/rand"
 
 	"github.com/danmuck/dps_http/configs"
-	"github.com/danmuck/dps_http/lib/logs"
-	"github.com/danmuck/dps_http/lib/middleware"
 	"github.com/danmuck/dps_http/lib/storage/mongo"
+	"github.com/danmuck/dps_http/middleware"
+	logs "github.com/danmuck/dps_lib/logs"
 
 	"github.com/gin-gonic/gin"
 )

@@ -1,0 +1,13 @@
+# Server config
+Domain = "http://127.0.0.1:3000"
+Port = "8080"
+Services = ["admin", "auth", "users", "metrics"]
+
+# Database config
+[MONGO]
+URI = "mongodb://dirtpig:dps700server!@100.78.202.88:27017/"
+Database = "dps_http"
+
+# Auth config
+[Auth]
+JWTSecret = "your_jwt_secret_here"

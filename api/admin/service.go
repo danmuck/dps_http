@@ -8,9 +8,9 @@ import (
 	"github.com/danmuck/dps_http/api/auth"
 	api "github.com/danmuck/dps_http/api/v1"
 	"github.com/danmuck/dps_http/configs"
-	"github.com/danmuck/dps_http/lib/logs"
-	"github.com/danmuck/dps_http/lib/middleware"
 	"github.com/danmuck/dps_http/lib/storage/mongo"
+	"github.com/danmuck/dps_http/middleware"
+	logs "github.com/danmuck/dps_lib/logs"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/danmuck/dps_http/configs"
-	"github.com/danmuck/dps_http/lib/logs"
+	logs "github.com/danmuck/dps_lib/logs"
 )
 
 type DataGenerator struct {
